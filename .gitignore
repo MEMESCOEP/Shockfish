@@ -1,5 +1,10 @@
-
 /src/Stockfish
 /src/__pycache__
-src/Abdusattorov.pgn
 /src/Logs
+/src/Build
+/src/.compile_venv
+src/LivePGNTest.py
+/src/Dist
+src/.gdbinit
+/src/TestGames
+src/Shockfish.spec

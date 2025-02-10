@@ -1,0 +1,8 @@
+dearpygui_extend
+dearpygui
+requests
+pishock
+pillow
+psutil
+chess.com
+chess

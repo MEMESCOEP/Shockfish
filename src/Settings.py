@@ -3,9 +3,9 @@
 
 
 ## IMPORTS ##
-import UI as GUI
 import traceback
 import time
+import UI
 import os
 
 
@@ -17,7 +17,7 @@ class SettingsManager:
 
     ## FUNCTIONS ##
     def ResetSettings():
-        if GUI.GUIHelpers.DisplayYesNoPrompt("WARNING - Settings", "This will ERASE ALL of your settings! Are you really sure you want to do that?") == True:
+        if UI.GUIHelpers.DisplayYesNoPrompt("WARNING - Settings", "This will ERASE ALL of your settings! Are you really sure you want to do that?") == True:
             print(f"[INFO] >> Checking if settings file \"{SettingsManager.SettingsFilePath}\" exists...")            
 
             try:
@@ -29,10 +29,16 @@ class SettingsManager:
                     print("[INFO] >> Settings file does not exist.")
                     
                 time.sleep(0.1)
-                GUI.GUIHelpers.DisplayMessageBox("Information - Settings", "All settings have been reset.")
 
+                NewMessageBox = UI.MessageBox()
+                NewMessageBox.Title = "Information - Settings"
+                NewMessageBox.Message = "All settings have been reset."
+                NewMessageBox.Buttons = UI.MessageBoxButtons.Close
+
+                UI.GUIHelpers.DisplayMessageBoxObject(NewMessageBox)
+                
             except Exception as EX:
                 print(f"[ERROR] >> {EX}")
                 traceback.print_exc()
                 time.sleep(0.1)
-                GUI.GUIHelpers.DisplayMessageBox("Error - Settings", f"An error occurred while clearing settings: {EX}")
+                UI.GUIHelpers.DisplayMessageBox("Error - Settings", f"An error occurred while clearing settings: {EX}")
