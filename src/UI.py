@@ -345,6 +345,9 @@ class GUI:
         IMGUI.create_context()
 
         print("[INFO] >> Creating viewport and setting its properties...")
+        if Globals.CurrentPlatform == "windows":
+            IMGUIWindowSize[1] += 16
+
         IMGUI.setup_dearpygui()
         IMGUI.create_viewport(title='Shockfish', width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], clear_color=[0, 0, 0, 255])
         IMGUI.set_viewport_large_icon(GUI.WindowIconPath)

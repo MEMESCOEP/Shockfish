@@ -302,6 +302,9 @@ if __name__ == "__main__":
         StatsProc.start()
     
     try:
+        # Make sure the stockfish path is updated when this is running on Windows
+        Globals.UpdateStockfishPathFromPlatform(Globals.CurrentPlatform)
+
         # Initialize and set up the GUI
         print("[INFO] >> Initializing DearPyGui (IMGUI)...")
         UI.GUI.InitUI(Globals.WindowSize, ProgramVersion, SelectableGameModes, Debug)

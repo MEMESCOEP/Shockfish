@@ -4,11 +4,11 @@
 
 ## IMPORTS ##
 from chessdotcom import ChessDotComClient, Client, get_player_game_archives
+from zipfile import ZipFile
 from enum import Enum
 import dearpygui.dearpygui as IMGUI
 import multiprocessing
 import traceback
-import platform
 import requests
 import Globals
 import tarfile
@@ -91,11 +91,10 @@ class ChessManager:
             
             IMGUI.render_dearpygui_frame()
             
-            CurrentPlatform = platform.system().lower().replace("linux", "ubuntu").replace("darwin", "macos")
-            ArchiveType = "zip" if CurrentPlatform == "windows" else "tar"
-            DownloadURL = Globals.StockfishURL.replace("<ARCHIVE_TYPE>", ArchiveType).replace("<OS>", CurrentPlatform)
+            ArchiveType = "zip" if Globals.CurrentPlatform == "windows" else "tar"
+            DownloadURL = Globals.StockfishURL.replace("<ARCHIVE_TYPE>", ArchiveType).replace("<OS>", Globals.CurrentPlatform)
             ArchivePath = Globals.SFArchivePath.replace("<ARCHIVE_TYPE>", ArchiveType)
-            OldEXEName = DownloadURL.split("/")[-1].split(".")[0] + (".exe" if CurrentPlatform == "windows" else "")
+            OldEXEName = DownloadURL.split("/")[-1].split(".")[0] + (".exe" if Globals.CurrentPlatform == "windows" else "")
             
             print(f"[INFO] >> Downloading stockfish from \"{DownloadURL}\", to file \"{ArchivePath}\"...")
             with requests.get(DownloadURL, stream=True) as response:
@@ -118,28 +117,64 @@ class ChessManager:
                                 if Progress % 0.5 == 0:
                                     IMGUI.render_dearpygui_frame()
 
-            with tarfile.open(ArchivePath, 'r') as ArchiveFile:
-                FilesToExtract = ArchiveFile.getmembers()
-                ExtractedCount = 0
-                ExtractPath = os.path.dirname(Globals.StockfishPath)
-                FileCount = len(FilesToExtract)
+            if Globals.CurrentPlatform == "windows":
+                with ZipFile(ArchivePath, 'r') as ArchiveFile:
+                    FilesToExtract = ArchiveFile.namelist()
+                    ExtractedCount = 0
+                    ExtractPath = os.path.dirname(Globals.StockfishPath)
+                    FileInZIP = ""
+                    FileCount = len(FilesToExtract)
 
-                print(f"[INFO] >> Extracting {FileCount} file(s) to \"{ExtractPath}\"...")
+                    print(f"[INFO] >> Extracting {FileCount} file(s) to \"{ExtractPath}\"...")
 
-                for File in FilesToExtract:
-                    ArchiveFile.extract(File, path=".")
+                    for File in FilesToExtract:
+                        if File.endswith('/'):
+                            continue
 
-                    ExtractedCount += 1
-                    Progress = round((ExtractedCount / FileCount) * 100, 2)
+                        if File.startswith('stockfish/'):
+                            FileInZIP = File[len('stockfish/'):]
 
-                    IMGUI.set_value("DLEProgressBar", Progress / 100)
-                    IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
-                    IMGUI.focus_item("DLEWindow")
-                    IMGUI.render_dearpygui_frame()
+                        else:
+                            FileInZIP = File
+
+                        ExtractedFilePath = os.path.join(ExtractPath, FileInZIP)
+                        os.makedirs(os.path.dirname(ExtractedFilePath.capitalize()), exist_ok=True)
+
+                        with ArchiveFile.open(File) as OpFile:
+                            with open(ExtractedFilePath, 'wb') as OutFile:
+                                OutFile.write(OpFile.read())
+
+                        ExtractedCount += 1
+                        Progress = round((ExtractedCount / FileCount) * 100, 2)
+
+                        IMGUI.set_value("DLEProgressBar", Progress / 100)
+                        IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
+                        IMGUI.focus_item("DLEWindow")
+                        IMGUI.render_dearpygui_frame()
+
+            else:
+                with tarfile.open(ArchivePath, 'r') as ArchiveFile:
+                    FilesToExtract = ArchiveFile.getmembers()
+                    ExtractedCount = 0
+                    ExtractPath = os.path.dirname(Globals.StockfishPath)
+                    FileCount = len(FilesToExtract)
+
+                    print(f"[INFO] >> Extracting {FileCount} file(s) to \"{ExtractPath}\"...")
+
+                    for File in FilesToExtract:
+                        ArchiveFile.extract(File, path=".")
+
+                        ExtractedCount += 1
+                        Progress = round((ExtractedCount / FileCount) * 100, 2)
+
+                        IMGUI.set_value("DLEProgressBar", Progress / 100)
+                        IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
+                        IMGUI.focus_item("DLEWindow")
+                        IMGUI.render_dearpygui_frame()
 
                 os.rename("stockfish", "Stockfish")
-                os.rename(f"Stockfish/{OldEXEName}", f"Stockfish/{OldEXEName.replace('-' + CurrentPlatform, '')}")
-            
+
+            os.rename(f"Stockfish/{OldEXEName}", f"Stockfish/{OldEXEName.replace('-' + Globals.CurrentPlatform, '')}")            
             os.remove(ArchivePath)
             IMGUI.delete_item("DLEWindow")
 
@@ -175,7 +210,6 @@ class ChessManager:
 
                     elif X == 4:
                         ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}King", "Pos": ChessManager.BoardPosNames[Y][X]})
-
 
     # Check if Stockfish exists on the disk
     def DoesStockfishExist(StockfishPath):
