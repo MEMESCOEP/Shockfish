@@ -4,10 +4,7 @@
 
 ## IMPORTS ##
 from enum import Enum
-import dearpygui.dearpygui as IMGUI
 import dearpygui_extend as IMGUI_E
-import Settings as SettingsManager
-import ChessManager
 import webbrowser
 import Globals
 import string
@@ -16,6 +13,20 @@ import os
 
 
 ## CLASSES ##
+class ModuleReferences:
+    ## VARIABLES ##
+    MODULE_REF_SETTINGSMANAGER = None
+    MODULE_REF_PISHOCKMANAGER = None
+    MODULE_REF_CHESSMANAGER = None
+
+
+    ## FUNCTIONS ##
+    def PassReferences(SettingsManager: __module__, PiShockManager: __module__, ChessManager: __module__, IMGUI: __module__):
+        ModuleReferences.MODULE_REF_SETTINGSMANAGER = SettingsManager
+        ModuleReferences.MODULE_REF_PISHOCKMANAGER = PiShockManager
+        ModuleReferences.MODULE_REF_CHESSMANAGER = ChessManager
+        ModuleReferences.MODULE_REF_IMGUI = IMGUI
+
 class MessageBoxButtons(Enum):
     NoButtons = 0
     Close = 1
@@ -36,10 +47,10 @@ class MessageBox:
     ## FUNCTIONS ##
     def Destroy(self):
         self.MBClosed = True
-        IMGUI.hide_item(self.Window)
+        ModuleReferences.MODULE_REF_IMGUI.hide_item(self.Window)
         time.sleep(0.05)
-        IMGUI.delete_item(self.Window)
-        IMGUI.delete_item(self)
+        ModuleReferences.MODULE_REF_IMGUI.delete_item(self.Window)
+        ModuleReferences.MODULE_REF_IMGUI.delete_item(self)
 
 class FileDialog:
     ## FUNCTIONS ##
@@ -49,7 +60,10 @@ class FileDialog:
     #   StartingDirectory (str) -> the directory the dialog should open and show
     #   ValidExstensions (array) -> only files with one these extensions will be displayed, EX: [{'label': 'All files', 'formats': ['*']}, {'label': 'Text files', 'formats': ['txt']}]
     #   DefaultExtension (int) -> the index of the extension in ValidExstensions that should be selected by default
-    def __init__(self, Title="Shockfish - File Dialog", StartingDirectory=Globals.MainProgramPath, ValidExstensions=[{'label': 'All files', 'formats': ['*']}], DefaultExtension=0):
+    def __init__(self, Title="Shockfish - File Dialog", StartingDirectory=None, ValidExstensions=[{'label': 'All files', 'formats': ['*']}], DefaultExtension=0):
+        if StartingDirectory == None:
+            StartingDirectory = Globals.MainProgramPath
+        
         self.FileSelectedAction = None
         self.DefaultExtension = DefaultExtension
         self.ExtensionFilter = ValidExstensions
@@ -63,7 +77,7 @@ class FileDialog:
 
     def UpdateFilename(self, Sender, Files, CancelPressed):
         if CancelPressed == True or len(Files) > 0:
-            IMGUI.delete_item(self.DGWindow)
+            ModuleReferences.MODULE_REF_IMGUI.delete_item(self.DGWindow)
 
             if CancelPressed == False:
                 self.Filename = Files[0]
@@ -82,8 +96,7 @@ class FileDialog:
     # Creates a new window with a file browser inside of it. This function should only be called once until the file dialog is closed.
     def Show(self):
         self.UIDrawn = False
-        self.DGWindow = IMGUI.add_window(label=self.Title, pos=(0, 0), width=680, height=370, modal=True, no_collapse=True, no_resize=True)
-        time.sleep(0.1)
+        self.DGWindow = ModuleReferences.MODULE_REF_IMGUI.add_window(label=self.Title, pos=(0, 0), width=680, height=370, modal=True, no_collapse=True, no_resize=True)
         IMGUI_E.add_file_browser(
             tag=None,
             label=('Choose files', self.Title),
@@ -129,23 +142,23 @@ class GUIHelpers:
             if Debug == True:
                 print(f"[DEBUG] >> Deleting image \"{Image}\"...")
 
-            IMGUI.delete_item(Image)
+            ModuleReferences.MODULE_REF_IMGUI.delete_item(Image)
 
         GUI.DrawnPieces.clear()
 
-        for State in ChessManager.ChessManager.CurrentBoardState:
-            PosRect = ChessManager.ChessManager.BoardPieceLocations[int(State["Pos"][1:]) - 1][string.ascii_uppercase.index(State["Pos"][:1])]
+        for State in ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.CurrentBoardState:
+            PosRect = ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.BoardPieceLocations[int(State["Pos"][1:]) - 1][string.ascii_uppercase.index(State["Pos"][:1])]
 
             if Debug == True:
                 print(f"[DEBUG] >> Drawing new \"{State["Piece"]}\" at \"{State["Pos"]}\" (Position rect = {PosRect})...")
 
-            NewImage = IMGUI.draw_image(texture_tag=State["Piece"], pmin=PosRect[0], pmax=PosRect[1], parent="ChessBoardGraphic")
+            NewImage = ModuleReferences.MODULE_REF_IMGUI.draw_image(texture_tag=State["Piece"], pmin=PosRect[0], pmax=PosRect[1], parent="ChessBoardGraphic")
             GUI.DrawnPieces.append(NewImage)
 
     # Create a button that acts as a clickable link. This will open a URL in the default web browser.
     def DisplayButtonHyperlink(Text, Address):
-        HLButton = IMGUI.add_button(label=Text, callback=lambda:webbrowser.open(Address))
-        IMGUI.bind_item_theme(HLButton, "__demo_hyperlinkTheme")
+        HLButton = ModuleReferences.MODULE_REF_IMGUI.add_button(label=Text, callback=lambda:webbrowser.open(Address))
+        ModuleReferences.MODULE_REF_IMGUI.bind_item_theme(HLButton, "__demo_hyperlinkTheme")
 
     # Create a settings option for
     def CreatePieceDropdown(PieceName, PointValue):
@@ -155,88 +168,88 @@ class GUIHelpers:
         else:
             PointStr = PointValue
 
-        with IMGUI.collapsing_header(label=f"{PieceName} ({PointStr})", indent=12):
-            IMGUI.add_checkbox(label="Enable shocker control for this piece", tag=f"{PieceName}EnableCheckbox", default_value=True, indent=12)
+        with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label=f"{PieceName} ({PointStr})", indent=12):
+            ModuleReferences.MODULE_REF_IMGUI.add_checkbox(label="Enable shocker control for this piece", tag=f"{PieceName}EnableCheckbox", default_value=True, indent=12)
 
-            with IMGUI.group(tag=f"{PieceName}Properties"):
-                IMGUI.add_combo(items=["Shock", "Vibrate"], default_value="Vibrate", width=-1, tag=f"{PieceName}ActionComboBox", indent=12)
+            with ModuleReferences.MODULE_REF_IMGUI.group(tag=f"{PieceName}Properties"):
+                ModuleReferences.MODULE_REF_IMGUI.add_combo(items=["Shock", "Vibrate"], default_value="Vibrate", width=-1, tag=f"{PieceName}ActionComboBox", indent=12)
 
-                with IMGUI.group(horizontal=True, indent=12):
-                    IMGUI.add_text("Intensity: ")
-                    IMGUI.add_slider_int(default_value=5, min_value=1, max_value=100, format="%d%%", tag=f"{PieceName}IntensityInput")
-                    IMGUI.add_button(label="-", repeat=True, width=24, callback=lambda: IMGUI.set_value(f"{PieceName}IntensityInput", IMGUI.get_value(f"{PieceName}IntensityInput") - 1))
-                    IMGUI.add_button(label="+", repeat=True, width=24, callback=lambda: IMGUI.set_value(f"{PieceName}IntensityInput", IMGUI.get_value(f"{PieceName}IntensityInput") + 1))
+                with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                    ModuleReferences.MODULE_REF_IMGUI.add_text("Intensity: ")
+                    ModuleReferences.MODULE_REF_IMGUI.add_slider_int(default_value=5, min_value=1, max_value=100, format="%d%%", tag=f"{PieceName}IntensityInput")
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="-", repeat=True, width=24, callback=lambda: ModuleReferences.MODULE_REF_IMGUI.set_value(f"{PieceName}IntensityInput", ModuleReferences.MODULE_REF_IMGUI.get_value(f"{PieceName}IntensityInput") - 1))
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="+", repeat=True, width=24, callback=lambda: ModuleReferences.MODULE_REF_IMGUI.set_value(f"{PieceName}IntensityInput", ModuleReferences.MODULE_REF_IMGUI.get_value(f"{PieceName}IntensityInput") + 1))
 
-                with IMGUI.group(horizontal=True, indent=12):
-                    IMGUI.add_text("Duration (S): ")
-                    IMGUI.add_slider_float(default_value=0.5, min_value=0.1, max_value=15, format="%.1f second(s)", tag=f"{PieceName}DurationInput")
-                    IMGUI.add_button(label="-", repeat=True, width=24, callback=lambda: IMGUI.set_value(f"{PieceName}DurationInput", IMGUI.get_value(f"{PieceName}DurationInput") - 0.1))
-                    IMGUI.add_button(label="+", repeat=True, width=24, callback=lambda: IMGUI.set_value(f"{PieceName}DurationInput", IMGUI.get_value(f"{PieceName}DurationInput") + 0.1))
+                with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                    ModuleReferences.MODULE_REF_IMGUI.add_text("Duration (S): ")
+                    ModuleReferences.MODULE_REF_IMGUI.add_slider_float(default_value=0.5, min_value=0.1, max_value=15, format="%.1f second(s)", tag=f"{PieceName}DurationInput")
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="-", repeat=True, width=24, callback=lambda: ModuleReferences.MODULE_REF_IMGUI.set_value(f"{PieceName}DurationInput", ModuleReferences.MODULE_REF_IMGUI.get_value(f"{PieceName}DurationInput") - 0.1))
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="+", repeat=True, width=24, callback=lambda: ModuleReferences.MODULE_REF_IMGUI.set_value(f"{PieceName}DurationInput", ModuleReferences.MODULE_REF_IMGUI.get_value(f"{PieceName}DurationInput") + 0.1))
 
-            IMGUI.add_spacer()
-            IMGUI.add_spacer()
+            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
+            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
     # Show and hide an element with a boolean. True shows, and False hides.
     def ShowHideItemWithBoolean(ShowHide, ItemName):
         if ShowHide == True:
-            IMGUI.show_item(ItemName)
+            ModuleReferences.MODULE_REF_IMGUI.show_item(ItemName)
 
         else:
-            IMGUI.hide_item(ItemName)
+            ModuleReferences.MODULE_REF_IMGUI.hide_item(ItemName)
 
     # Display a message box window in the middle of the main viewport, using the MessageBox class
     def DisplayMessageBoxObject(MessageBox, ForceRender=False):
-        with IMGUI.window(label=MessageBox.Title, width=360, height=150, pos=[(Globals.WindowSize[0] // 2) - 180, (Globals.WindowSize[1] // 2) - 75], no_move=True, no_resize=True, no_collapse=True, modal=True, no_scrollbar=False, no_close=True) as MsgBoxWindow:
+        with ModuleReferences.MODULE_REF_IMGUI.window(label=MessageBox.Title, width=360, height=150, pos=[(Globals.WindowSize[0] // 2) - 180, (Globals.WindowSize[1] // 2) - 75], no_move=True, no_resize=True, no_collapse=True, modal=True, no_scrollbar=False, no_close=True) as MsgBoxWindow:
             MessageBox.Window = MsgBoxWindow
 
-            with IMGUI.child_window(width=-1, height=76, border=False):
-                IMGUI.add_text(MessageBox.Message, wrap=325)
+            with ModuleReferences.MODULE_REF_IMGUI.child_window(width=-1, height=76, border=False):
+                ModuleReferences.MODULE_REF_IMGUI.add_text(MessageBox.Message, wrap=325)
 
             match MessageBox.Buttons:
                 case MessageBoxButtons.Close:
-                    IMGUI.add_button(label="Close", tag="MBCloseButton", width=48)
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Close", tag="MBCloseButton", width=48)
 
                 case MessageBoxButtons.YesNo:
-                    IMGUI.add_button(label="Yes", tag="MBYesButton", width=48)
-                    IMGUI.add_button(label="No", tag="MBNoButton", width=48)
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Yes", tag="MBYesButton", width=48)
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="No", tag="MBNoButton", width=48)
 
                 case MessageBoxButtons.Ok:
-                    IMGUI.add_button(label="Ok", tag="MBOkButton", width=48)
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Ok", tag="MBOkButton", width=48)
 
         match MessageBox.Buttons:
             case MessageBoxButtons.NoButtons:
                 MessageBox.MBClosed = True
 
             case MessageBoxButtons.Close:
-                CloseButtonState = IMGUI.get_item_state("MBCloseButton")['active']
+                CloseButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBCloseButton")['active']
 
                 while CloseButtonState == False:
-                    MsgBoxSize = [IMGUI.get_item_width(MsgBoxWindow), IMGUI.get_item_height(MsgBoxWindow)]
-                    CloseButtonState = IMGUI.get_item_state("MBCloseButton")['active']
+                    MsgBoxSize = [ModuleReferences.MODULE_REF_IMGUI.get_item_width(MsgBoxWindow), ModuleReferences.MODULE_REF_IMGUI.get_item_height(MsgBoxWindow)]
+                    CloseButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBCloseButton")['active']
 
                     if Globals.GUIInitFinished.value == False or ForceRender == True:
-                        IMGUI.render_dearpygui_frame()
+                        ModuleReferences.MODULE_REF_IMGUI.render_dearpygui_frame()
 
-                    IMGUI.set_item_pos("MBCloseButton", [(MsgBoxSize[0] / 2) - 28, MsgBoxSize[1] - 30])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_pos("MBCloseButton", [(MsgBoxSize[0] / 2) - 28, MsgBoxSize[1] - 30])
                     time.sleep(0.01)
 
                 if MessageBox.Actions[CloseButtonState] != None:
                     MessageBox.Actions[CloseButtonState]()
 
             case MessageBoxButtons.YesNo:
-                YesButtonState = IMGUI.get_item_state("MBYesButton")['active']
-                NoButtonState = IMGUI.get_item_state("MBNoButton")['active']
+                YesButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBYesButton")['active']
+                NoButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBNoButton")['active']
 
                 while YesButtonState == False and NoButtonState == False:
-                    MsgBoxSize = [IMGUI.get_item_width(MsgBoxWindow), IMGUI.get_item_height(MsgBoxWindow)]
-                    YesButtonState = IMGUI.get_item_state("MBYesButton")['active']
-                    NoButtonState = IMGUI.get_item_state("MBNoButton")['active']
+                    MsgBoxSize = [ModuleReferences.MODULE_REF_IMGUI.get_item_width(MsgBoxWindow), ModuleReferences.MODULE_REF_IMGUI.get_item_height(MsgBoxWindow)]
+                    YesButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBYesButton")['active']
+                    NoButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBNoButton")['active']
 
-                    IMGUI.set_item_pos("MBYesButton", [(MsgBoxSize[0] / 2) - 52, MsgBoxSize[1] - 30])
-                    IMGUI.set_item_pos("MBNoButton", [(MsgBoxSize[0] / 2) + 8, MsgBoxSize[1] - 30])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_pos("MBYesButton", [(MsgBoxSize[0] / 2) - 52, MsgBoxSize[1] - 30])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_pos("MBNoButton", [(MsgBoxSize[0] / 2) + 8, MsgBoxSize[1] - 30])
 
                     if Globals.GUIInitFinished.value == False or ForceRender == True:
-                        IMGUI.render_dearpygui_frame()
+                        ModuleReferences.MODULE_REF_IMGUI.render_dearpygui_frame()
 
                     time.sleep(0.01)
 
@@ -244,16 +257,16 @@ class GUIHelpers:
                     MessageBox.Actions[YesButtonState]()
 
             case MessageBoxButtons.Ok:
-                OkButtonState = IMGUI.get_item_state("MBOkButton")['active']
+                OkButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBOkButton")['active']
 
                 while OkButtonState == False:
-                    MsgBoxSize = [IMGUI.get_item_width(MsgBoxWindow), IMGUI.get_item_height(MsgBoxWindow)]
-                    OkButtonState = IMGUI.get_item_state("MBOkButton")['active']
+                    MsgBoxSize = [ModuleReferences.MODULE_REF_IMGUI.get_item_width(MsgBoxWindow), ModuleReferences.MODULE_REF_IMGUI.get_item_height(MsgBoxWindow)]
+                    OkButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("MBOkButton")['active']
 
-                    IMGUI.set_item_pos("MBOkButton", [(MsgBoxSize[0] / 2) + 8, MsgBoxSize[1] - 30])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_pos("MBOkButton", [(MsgBoxSize[0] / 2) + 8, MsgBoxSize[1] - 30])
 
                     if Globals.GUIInitFinished.value == False or ForceRender == True:
-                        IMGUI.render_dearpygui_frame()
+                        ModuleReferences.MODULE_REF_IMGUI.render_dearpygui_frame()
 
                     time.sleep(0.01)
 
@@ -268,42 +281,42 @@ class GUIHelpers:
 
     # Display a message box window in the middle of the main viewport
     def DisplayMessageBox(Title, Message):
-        with IMGUI.window(label=Title, width=360, height=150, pos=[(Globals.WindowSize[0] // 2) - 180, (Globals.WindowSize[1] // 2) - 75], no_move=True, no_resize=True, no_collapse=True, modal=True, no_scrollbar=False) as MsgBoxWindow:
-            IMGUI.add_text(Message, wrap=345)
+        with ModuleReferences.MODULE_REF_IMGUI.window(label=Title, width=360, height=150, pos=[(Globals.WindowSize[0] // 2) - 180, (Globals.WindowSize[1] // 2) - 75], no_move=True, no_resize=True, no_collapse=True, modal=True, no_scrollbar=False) as MsgBoxWindow:
+            ModuleReferences.MODULE_REF_IMGUI.add_text(Message, wrap=345)
 
     # Display a messagebox window in the middle of the main viewport, with yes and no options
     def DisplayYesNoPrompt(Title, Message, UpdateWhileWaitingForResponse=False):
-        with IMGUI.window(label=Title, width=360, height=150, pos=[(Globals.WindowSize[0] // 2) - 180, (Globals.WindowSize[1] // 2) - 75], no_move=True, no_resize=True, no_collapse=True, modal=True, no_scrollbar=False, no_close=True) as MsgBoxWindow:
-            IMGUI.add_text(Message, wrap=345)
-            IMGUI.add_button(label="Yes", tag="YNYesButton", width=48)
-            IMGUI.add_button(label="No", tag="YNNoButton", width=48)
+        with ModuleReferences.MODULE_REF_IMGUI.window(label=Title, width=360, height=150, pos=[(Globals.WindowSize[0] // 2) - 180, (Globals.WindowSize[1] // 2) - 75], no_move=True, no_resize=True, no_collapse=True, modal=True, no_scrollbar=False, no_close=True) as MsgBoxWindow:
+            ModuleReferences.MODULE_REF_IMGUI.add_text(Message, wrap=345)
+            ModuleReferences.MODULE_REF_IMGUI.add_button(label="Yes", tag="YNYesButton", width=48)
+            ModuleReferences.MODULE_REF_IMGUI.add_button(label="No", tag="YNNoButton", width=48)
 
-        YesButtonState = IMGUI.get_item_state("YNYesButton")['active']
-        NoButtonState = IMGUI.get_item_state("YNNoButton")['active']
+        YesButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("YNYesButton")['active']
+        NoButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("YNNoButton")['active']
 
         while YesButtonState == False and NoButtonState == False:
-            MsgBoxSize = [IMGUI.get_item_width(MsgBoxWindow), IMGUI.get_item_height(MsgBoxWindow)]
-            YesButtonState = IMGUI.get_item_state("YNYesButton")['active']
-            NoButtonState = IMGUI.get_item_state("YNNoButton")['active']
+            MsgBoxSize = [ModuleReferences.MODULE_REF_IMGUI.get_item_width(MsgBoxWindow), ModuleReferences.MODULE_REF_IMGUI.get_item_height(MsgBoxWindow)]
+            YesButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("YNYesButton")['active']
+            NoButtonState = ModuleReferences.MODULE_REF_IMGUI.get_item_state("YNNoButton")['active']
 
-            IMGUI.set_item_pos("YNYesButton", [(MsgBoxSize[0] / 2) - 52, MsgBoxSize[1] - 30])
-            IMGUI.set_item_pos("YNNoButton", [(MsgBoxSize[0] / 2) + 8, MsgBoxSize[1] - 30])
+            ModuleReferences.MODULE_REF_IMGUI.set_item_pos("YNYesButton", [(MsgBoxSize[0] / 2) - 52, MsgBoxSize[1] - 30])
+            ModuleReferences.MODULE_REF_IMGUI.set_item_pos("YNNoButton", [(MsgBoxSize[0] / 2) + 8, MsgBoxSize[1] - 30])
 
             if UpdateWhileWaitingForResponse == True:
-                IMGUI.render_dearpygui_frame()
+                ModuleReferences.MODULE_REF_IMGUI.render_dearpygui_frame()
 
             time.sleep(0.01)
 
-        IMGUI.delete_item(MsgBoxWindow)
+        ModuleReferences.MODULE_REF_IMGUI.delete_item(MsgBoxWindow)
         return YesButtonState
 
     def RemakeMoveTable():
-        IMGUI.add_table_column(label="Move", parent="MoveListTable")
-        IMGUI.add_table_column(label="Color", parent="MoveListTable")
-        IMGUI.add_table_column(label="Player", parent="MoveListTable")
-        IMGUI.add_table_column(label="From", parent="MoveListTable")
-        IMGUI.add_table_column(label="To", parent="MoveListTable")
-        IMGUI.add_table_column(label="Quality", parent="MoveListTable")
+        ModuleReferences.MODULE_REF_IMGUI.add_table_column(label="Move", parent="MoveListTable")
+        ModuleReferences.MODULE_REF_IMGUI.add_table_column(label="Color", parent="MoveListTable")
+        ModuleReferences.MODULE_REF_IMGUI.add_table_column(label="Player", parent="MoveListTable")
+        ModuleReferences.MODULE_REF_IMGUI.add_table_column(label="From", parent="MoveListTable")
+        ModuleReferences.MODULE_REF_IMGUI.add_table_column(label="To", parent="MoveListTable")
+        ModuleReferences.MODULE_REF_IMGUI.add_table_column(label="Quality", parent="MoveListTable")
 
     def CommunicateWithStatsThread():
         Globals.LastIMGUICommunication.value = time.time()
@@ -311,22 +324,14 @@ class GUIHelpers:
 
 class GUI:
     ## VARIABLES ##
-    ChessPieceFSMappings = [
-        ("Bishop.png", ChessManager.ChessPieces.King),
-        ("Knight.png", ChessManager.ChessPieces.Knight),
-        ("Queen.png", ChessManager.ChessPieces.Queen),
-        ("King.png", ChessManager.ChessPieces.King),
-        ("Pawn.png", ChessManager.ChessPieces.Pawn),
-        ("Rook.png", ChessManager.ChessPieces.Rook)
-    ]
-
-    ForcedUpdateInterval = 0.025
+    ForcedUpdateInterval = 0.05
     DebugXAxisTimeValues = [0]
     ChessboardColors = [[205, 176, 131], [85, 52, 43], [133, 121, 87]] # Checker 1, checker 2, board border
-    DefaultFontPath = os.path.join(Globals.CurrentCWDPath, "UI/Fonts/Aileron-Regular.ttf")
-    PieceIconPaths = os.path.join(Globals.CurrentCWDPath, "UI/ChessPieces/")
-    WindowIconPath = os.path.join(Globals.CurrentCWDPath, "UI/Icon.bmp")
+    DefaultFontPath = os.path.join(Globals.CurrentCWDPath, "UI", "Fonts", "Aileron-Regular.ttf")
+    PieceIconPaths = os.path.join(Globals.CurrentCWDPath, "UI", f"ChessPieces{Globals.PathSeparator}")
+    WindowIconPath = os.path.join(Globals.CurrentCWDPath, "UI", "Icon.bmp")
     WindowResized = True
+    ForceUIRender = False
     MovesUpdated = False
     LastMousePos = [0, 0]
     MessageBoxes = []
@@ -337,43 +342,47 @@ class GUI:
     MoveList = []
     CPUData = [0.0]
     MEMData = [0.0]
+    FPSData = [0.0]
 
 
     ## FUNCTIONS ##
+    def ScrollHandler():
+        GUI.ForceUIRender = True
+
     def InitUI(IMGUIWindowSize, ProgramVersion, SelectableGameModes, Debug=False):
         print("[INFO] >> Creating DearPyGUI context...")
-        IMGUI.create_context()
+        ModuleReferences.MODULE_REF_IMGUI.create_context()
 
         print("[INFO] >> Creating viewport and setting its properties...")
         if Globals.CurrentPlatform == "windows":
             IMGUIWindowSize[1] += 16
 
-        IMGUI.setup_dearpygui()
-        IMGUI.create_viewport(title='Shockfish', width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], clear_color=[0, 0, 0, 255])
-        IMGUI.set_viewport_large_icon(GUI.WindowIconPath)
-        IMGUI.set_viewport_small_icon(GUI.WindowIconPath)
-        IMGUI.set_viewport_min_width(IMGUIWindowSize[0])
-        IMGUI.set_viewport_min_height(IMGUIWindowSize[1])
-        IMGUI.set_viewport_resize_callback(GUIHelpers.UpdateWindowOnResize)
-        IMGUI.show_viewport()
+        ModuleReferences.MODULE_REF_IMGUI.setup_dearpygui()
+        ModuleReferences.MODULE_REF_IMGUI.create_viewport(title='Shockfish', width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], clear_color=[0, 0, 0, 255])
+        ModuleReferences.MODULE_REF_IMGUI.set_viewport_large_icon(GUI.WindowIconPath)
+        ModuleReferences.MODULE_REF_IMGUI.set_viewport_small_icon(GUI.WindowIconPath)
+        ModuleReferences.MODULE_REF_IMGUI.set_viewport_min_width(IMGUIWindowSize[0])
+        ModuleReferences.MODULE_REF_IMGUI.set_viewport_min_height(IMGUIWindowSize[1])
+        ModuleReferences.MODULE_REF_IMGUI.set_viewport_resize_callback(GUIHelpers.UpdateWindowOnResize)
+        ModuleReferences.MODULE_REF_IMGUI.show_viewport()
 
         print(f"[INFO] >> Loading UI font \"{GUI.DefaultFontPath}\"...")
-        with IMGUI.font_registry():
-            UIFont = IMGUI.add_font(GUI.DefaultFontPath, 16)
+        with ModuleReferences.MODULE_REF_IMGUI.font_registry():
+            UIFont = ModuleReferences.MODULE_REF_IMGUI.add_font(GUI.DefaultFontPath, 16)
 
-        IMGUI.bind_font(UIFont)
+        ModuleReferences.MODULE_REF_IMGUI.bind_font(UIFont)
 
         StopSearchingForIcons = False
         print("[INFO] >> Checking if chess piece icons exist and loading them...")
 
-        for PieceColor in ChessManager.ChessManager.ChessPieceColors:
+        for PieceColor in ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.ChessPieceColors:
             if StopSearchingForIcons == True:
                 break
 
             if Debug == True:
                 print(f"[DEBUG] >> Checking for \"{PieceColor}\" piece images...")
 
-            for PieceMapping in GUI.ChessPieceFSMappings:
+            for PieceMapping in ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.ChessPieceFSMappings:
                 if Debug == True:
                     print(f"[DEBUG] >> Checking for \"{PieceMapping[0]}\" piece mapping image...")
 
@@ -391,18 +400,18 @@ class GUI:
                         break
 
                 else:
-                    Width, Height, Channels, Data = IMGUI.load_image(IconPath)
+                    Width, Height, Channels, Data = ModuleReferences.MODULE_REF_IMGUI.load_image(IconPath)
 
-                    with IMGUI.texture_registry():
-                        IMGUI.add_static_texture(Width, Height, Data, tag=f"{PieceColor}{PieceMapping[0].split(".")[0]}")
+                    with ModuleReferences.MODULE_REF_IMGUI.texture_registry():
+                        ModuleReferences.MODULE_REF_IMGUI.add_static_texture(Width, Height, Data, tag=f"{PieceColor}{PieceMapping[0].split(".")[0]}")
 
                     if Debug == True:
                         print(f"[DEBUG] >> Added static texture with tag \"{PieceColor}{PieceMapping[0].split(".")[0]}\" ({Channels} channels, Dimensions are {Width}x{Height}, Size is {len(Data)})...")
 
         print("[INFO] >> Defining UI...")
-        with IMGUI.window(label="MainWindow", tag="MainWindow", width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], pos=(0, 0), no_title_bar=True, no_move=True, no_resize=True, no_collapse=True) as GUI.MainWindow:
+        with ModuleReferences.MODULE_REF_IMGUI.window(label="MainWindow", tag="MainWindow", width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], pos=(0, 0), no_title_bar=True, no_move=True, no_resize=True, no_collapse=True) as GUI.MainWindow:
             # Main tab bar
-            with IMGUI.tab_bar(label='MainTabBar', tag="MainTabBar", reorderable=True):
+            with ModuleReferences.MODULE_REF_IMGUI.tab_bar(label='MainTabBar', tag="MainTabBar", reorderable=True):
                 # Game tab
                 BorderThickness = 4
                 InnerBoardSize = GUI.BoardSize - BorderThickness
@@ -412,12 +421,12 @@ class GUI:
                 if Debug == True:
                     print(f"[DEBUG] >> Chess board has total size of {GUI.BoardSize}x{GUI.BoardSize}, with inner dimensions being {InnerBoardSize}x{InnerBoardSize}. Border thickness is {BorderThickness}, and the inner square size is {InnerBoxSize}x{InnerBoxSize}.")
 
-                with IMGUI.tab(label="Game", tag="GameTab"):
-                    IMGUI.add_spacer()
+                with ModuleReferences.MODULE_REF_IMGUI.tab(label="Game", tag="GameTab"):
+                    ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                    with IMGUI.group(horizontal=True, indent=2, tag="ChessBoardGroup"):
-                        with IMGUI.drawlist(width=GUI.BoardSize, height=GUI.BoardSize + 20, tag="ChessBoardGraphic"):
-                            with IMGUI.draw_layer():
+                    with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=2, tag="ChessBoardGroup"):
+                        with ModuleReferences.MODULE_REF_IMGUI.drawlist(width=GUI.BoardSize, height=GUI.BoardSize + 20, tag="ChessBoardGraphic"):
+                            with ModuleReferences.MODULE_REF_IMGUI.draw_layer():
                                 for Y in range(8):
                                     CurrentColor = not CurrentColor
                                     RowPositions = []
@@ -431,7 +440,7 @@ class GUI:
                                             [XChange + InnerBoxSize + BorderThickness, YChange + InnerBoxSize + BorderThickness]
                                         ]
 
-                                        IMGUI.draw_rectangle(
+                                        ModuleReferences.MODULE_REF_IMGUI.draw_rectangle(
                                             pmin=Rect[0], pmax=Rect[1],
                                             color=GUI.ChessboardColors[CurrentColor], fill=GUI.ChessboardColors[CurrentColor]
                                         )
@@ -440,164 +449,202 @@ class GUI:
                                             PiecePos = [(XChange + BorderThickness, YChange + BorderThickness), (XChange + InnerBoxSize + BorderThickness, YChange + InnerBoxSize + BorderThickness)]
                                             RowPositions.append(PiecePos)
 
-                                    ChessManager.ChessManager.BoardPieceLocations.append(RowPositions)
+                                    ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.BoardPieceLocations.append(RowPositions)
 
-                            IMGUI.draw_rectangle(pmin=[0, 0], pmax=[GUI.BoardSize, GUI.BoardSize], color=GUI.ChessboardColors[2], thickness=BorderThickness)
+                            ModuleReferences.MODULE_REF_IMGUI.draw_rectangle(pmin=[0, 0], pmax=[GUI.BoardSize, GUI.BoardSize], color=GUI.ChessboardColors[2], thickness=BorderThickness)
 
-                            with IMGUI.draw_layer():
-                                IMGUI.draw_line([0, 275], [258, 275], color=[96, 96, 96])
+                            with ModuleReferences.MODULE_REF_IMGUI.draw_layer():
+                                ModuleReferences.MODULE_REF_IMGUI.draw_line([0, 275], [258, 275], color=[96, 96, 96])
 
                         # Add the moves table
-                        with IMGUI.table(label="Move list", tag="MoveListTable", header_row=True, borders_innerH=True, borders_outerH=True, borders_outerV=True, row_background=True, scrollX=True, scrollY=True, resizable=True):
+                        with ModuleReferences.MODULE_REF_IMGUI.table(label="Move list", tag="MoveListTable", header_row=True, borders_innerH=True, borders_outerH=True, borders_outerV=True, row_background=True, scrollX=True, scrollY=True, resizable=True):
                             GUIHelpers.RemakeMoveTable()
 
-                    IMGUI.add_combo(items=SelectableGameModes, default_value="Select game mode", width=220, pos=[12, 325])
-                    IMGUI.add_button(label="?", tag="GamemodeHelpButton", width=24, pos=[240, 325], callback=lambda: GUIHelpers.DisplayMessageBox("Help - Game Modes",
+                    ModuleReferences.MODULE_REF_IMGUI.add_combo(items=SelectableGameModes, default_value="Select game mode", width=220, pos=[12, 325])
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="?", tag="GamemodeHelpButton", width=24, pos=[240, 325], callback=lambda: GUIHelpers.DisplayMessageBox("Help - Game Modes",
                         """There are 2 game modes to chose from: Realtime and Game Over. Here's a quick breakdown of each.
 
 Realtime mode:\n\tAll moves from both players are tracked in\n\trealtime. You'll know you messed up as soon\n\tas you make a mistake. Note that this mode\n\tonly works with daily games.
 
 Game Over mode:\n\tAll moves will be processed after the game\n\tends, which means you may not know you made\n\ta mistake until it's too late. You'll still\n\tbe punished for each and every error, so\n\tplay wisely!"""))
-                    IMGUI.add_button(label="Connect to game", tag="ConDisconButton", width=252, pos=[12, 355])
-                    IMGUI.add_button(label="Open a saved game (PGN file)", tag="OpenPGNButton", width=252, pos=[12, 385], callback=lambda: ChessManager.ChessManager.UILoadPGN(Debug))
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Connect to game", tag="ConDisconButton", width=252, pos=[12, 355], callback=lambda: ModuleReferences.MODULE_REF_PISHOCKMANAGER.ZapManager.SendCommandToPiShock(ModuleReferences.MODULE_REF_PISHOCKMANAGER.PiShockCommandTypes.Shock, 1, 1.0, Debug))
+                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Open a saved game (PGN file)", tag="OpenPGNButton", width=252, pos=[12, 385], callback=lambda: ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.UILoadPGN(Debug))
 
                 # Settings tab
-                with IMGUI.tab(label="Settings", tag="SettingsTab"):
-                    IMGUI.add_spacer()
+                with ModuleReferences.MODULE_REF_IMGUI.tab(label="Settings", tag="SettingsTab"):
+                    with ModuleReferences.MODULE_REF_IMGUI.child_window(width=-1, height=-1):
+                        # Chess game settings
+                        with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="Chess", default_open=True):
+                            with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                                ModuleReferences.MODULE_REF_IMGUI.add_text("Chess.com Username: ")
+                                ModuleReferences.MODULE_REF_IMGUI.add_input_text(hint="Enter Chess.com username", width=-1, tag="ChessUsernameInput")
 
-                    # Chess game settings
-                    with IMGUI.collapsing_header(label="Chess", default_open=True):
-                        with IMGUI.group(horizontal=True, indent=12):
-                            IMGUI.add_text("Chess.com Username: ")
-                            IMGUI.add_input_text(hint="Enter Chess.com username", width=-1, tag="ChessUsernameInput")
+                            with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                                ModuleReferences.MODULE_REF_IMGUI.add_text("Game URL: ")
+                                ModuleReferences.MODULE_REF_IMGUI.add_input_text(hint="Enter URL", width=-1, tag="GameURLInput")
 
-                        with IMGUI.group(horizontal=True, indent=12):
-                            IMGUI.add_text("Game URL: ")
-                            IMGUI.add_input_text(hint="Enter URL", width=-1, tag="GameURLInput")
+                            # Stockfish settings
+                            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                        # Stockfish settings
-                        IMGUI.add_spacer()
+                            with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="Stockfish", indent=12):
+                                with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=8):
+                                    ModuleReferences.MODULE_REF_IMGUI.add_text("Stockfish path: ")
+                                    ModuleReferences.MODULE_REF_IMGUI.add_input_text(default_value=Globals.StockfishPath, tag="StockfishPathInput", width=-1)
 
-                        with IMGUI.collapsing_header(label="Stockfish", indent=12):
-                            with IMGUI.group(horizontal=True, indent=8):
-                                IMGUI.add_text("Stockfish path: ")
-                                IMGUI.add_input_text(default_value=Globals.StockfishPath, tag="StockfishPathInput", width=-1)
+                                ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                            IMGUI.add_spacer()
+                            # Chess piece settings
+                            with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="Pieces", default_open=True, indent=12):
+                                with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=8):
+                                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Enable shocker control for all pieces", tag="EnableAllShockerControlButton")
+                                    ModuleReferences.MODULE_REF_IMGUI.add_button(label="Disable shocker control for all pieces", tag="DisableAllShockerControlButton")
 
-                        # Chess piece settings
-                        with IMGUI.collapsing_header(label="Pieces", default_open=True, indent=12):
-                            with IMGUI.group(horizontal=True, indent=8):
-                                IMGUI.add_button(label="Enable shocker control for all pieces", tag="EnableAllShockerControlButton")
-                                IMGUI.add_button(label="Disable shocker control for all pieces", tag="DisableAllShockerControlButton")
+                                ModuleReferences.MODULE_REF_IMGUI.add_spacer()
+                                GUIHelpers.CreatePieceDropdown("Pawn", 1)
+                                GUIHelpers.CreatePieceDropdown("Knight", 3)
+                                GUIHelpers.CreatePieceDropdown("Bishop", 3)
+                                GUIHelpers.CreatePieceDropdown("Rook", 5)
+                                GUIHelpers.CreatePieceDropdown("Queen", 9)
+                                GUIHelpers.CreatePieceDropdown("King", "Invaluable")
 
-                            IMGUI.add_spacer()
-                            GUIHelpers.CreatePieceDropdown("Pawn", 1)
-                            GUIHelpers.CreatePieceDropdown("Knight", 3)
-                            GUIHelpers.CreatePieceDropdown("Bishop", 3)
-                            GUIHelpers.CreatePieceDropdown("Rook", 5)
-                            GUIHelpers.CreatePieceDropdown("Queen", 9)
-                            GUIHelpers.CreatePieceDropdown("King", "Invaluable")
+                            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
+                            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                        IMGUI.add_spacer()
-                        IMGUI.add_spacer()
+                        # PiShock settings
+                        with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="PiShock", default_open=True):
+                            with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                                ModuleReferences.MODULE_REF_IMGUI.add_text("PiShock Username: ")
+                                ModuleReferences.MODULE_REF_IMGUI.add_input_text(hint="Enter PiShock username (EX: puppy73)", width=-1, tag="PiShockUsernameInput", callback=lambda: ModuleReferences.MODULE_REF_PISHOCKMANAGER.ZapManager.SetConfig(
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockSharecodeInput"),
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockUsernameInput"),
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockAPIKeyInput")
+                                ))
 
-                    # PiShock settings
-                    with IMGUI.collapsing_header(label="PiShock", default_open=True):
-                        with IMGUI.group(horizontal=True, indent=12):
-                            IMGUI.add_text("PiShock Username: ")
-                            IMGUI.add_input_text(hint="Enter PiShock username (EX: puppy73)", width=-1, tag="PiShockUsernameInput")
+                            with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                                ModuleReferences.MODULE_REF_IMGUI.add_text("Sharecode: ")
+                                ModuleReferences.MODULE_REF_IMGUI.add_input_text(hint="Enter PiShock sharecode (EX: 17519CD8GAP)", width=-1, tag="PiShockSharecodeInput", callback=lambda: ModuleReferences.MODULE_REF_PISHOCKMANAGER.ZapManager.SetConfig(
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockSharecodeInput"),
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockUsernameInput"),
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockAPIKeyInput")
+                                ))
 
-                        with IMGUI.group(horizontal=True, indent=12):
-                            IMGUI.add_text("Sharecode: ")
-                            IMGUI.add_input_text(hint="Enter PiShock sharecode (EX: 17519CD8GAP)", width=-1, tag="PiShockSharecodeInput")
+                            with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                                ModuleReferences.MODULE_REF_IMGUI.add_text("API Key: ")
+                                ModuleReferences.MODULE_REF_IMGUI.add_input_text(hint="Enter API key (EX: 5c678926-d19e-4f86-42ad-21f5a76126db)", width=-1, tag="PiShockAPIKeyInput", callback=lambda: ModuleReferences.MODULE_REF_PISHOCKMANAGER.ZapManager.SetConfig(
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockSharecodeInput"),
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockUsernameInput"),
+                                    ModuleReferences.MODULE_REF_IMGUI.get_value("PiShockAPIKeyInput")
+                                ))
 
-                        with IMGUI.group(horizontal=True, indent=12):
-                            IMGUI.add_text("API Key: ")
-                            IMGUI.add_input_text(hint="Enter API key (EX: 5c678926-d19e-4f86-42ad-21f5a76126db)", width=-1, tag="PiShockAPIKeyInput")
+                            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
+                            ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                        IMGUI.add_spacer()
-                        IMGUI.add_spacer()
-
-                    # Danger zone (settings reset)
-                    with IMGUI.collapsing_header(label="Danger zone"):
-                        IMGUI.add_button(label="Reset settings to defaults", width=-1, callback=SettingsManager.SettingsManager.ResetSettings)
+                        # Danger zone (settings reset)
+                        with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="Danger zone"):
+                            ModuleReferences.MODULE_REF_IMGUI.add_button(label="Reset settings to defaults", width=-1, callback=ModuleReferences.MODULE_REF_SETTINGSMANAGER.SettingsManager.ResetSettings)
 
                 # About Shockfish
-                with IMGUI.tab(label="About"):
-                    IMGUI.add_separator(label=f"Shockfish {ProgramVersion}")
-                    IMGUI.add_text("Written by MEMESCOEP, and released under the MIT License.", indent=12)
+                with ModuleReferences.MODULE_REF_IMGUI.tab(label="About"):
+                    ModuleReferences.MODULE_REF_IMGUI.add_separator(label=f"Shockfish {ProgramVersion}")
+                    ModuleReferences.MODULE_REF_IMGUI.add_text("Written by MEMESCOEP, and released under the MIT License.", indent=12)
 
-                    with IMGUI.group(horizontal=True, indent=12):
+                    with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
                         GUIHelpers.DisplayButtonHyperlink("Github Repository", "https://www.github.com/MEMESCOEP/Shockfish")
                         GUIHelpers.DisplayButtonHyperlink("MIT License", "https://opensource.org/license/mit")
 
                     for I in range(5):
-                        IMGUI.add_spacer()
+                        ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                    IMGUI.add_separator(label=f"DearPyGUI {IMGUI.get_dearpygui_version()}")
+                    ModuleReferences.MODULE_REF_IMGUI.add_separator(label=f"DearPyGUI {ModuleReferences.MODULE_REF_IMGUI.get_dearpygui_version()}")
 
-                    with IMGUI.group(horizontal=True, indent=12):
-                        IMGUI.add_text("Written by Jonathan Hoffstadt and Preston Cothren, and used under the MIT License.")
+                    with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                        ModuleReferences.MODULE_REF_IMGUI.add_text("Written by Jonathan Hoffstadt and Preston Cothren, and used under the MIT License.")
 
-                    with IMGUI.group(horizontal=True, indent=12):
+                    with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
                         GUIHelpers.DisplayButtonHyperlink("Github Repository", "https://github.com/hoffstadt/DearPyGui")
                         GUIHelpers.DisplayButtonHyperlink("Documentation", "https://dearpygui.readthedocs.io/en/latest/")
                         GUIHelpers.DisplayButtonHyperlink("MIT License", "https://opensource.org/license/mit")
 
                     for I in range(5):
-                        IMGUI.add_spacer()
+                        ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                    IMGUI.add_separator(label=f"Green Chess Piece Images")
+                    ModuleReferences.MODULE_REF_IMGUI.add_separator(label=f"Green Chess Piece Images")
 
-                    with IMGUI.group(horizontal=True, indent=12):
-                        IMGUI.add_text("Created by Green Chess, and used under the CC BY-SA 3.0 License.")
+                    with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
+                        ModuleReferences.MODULE_REF_IMGUI.add_text("Created by Green Chess, and used under the CC BY-SA 3.0 License.")
 
-                    with IMGUI.group(horizontal=True, indent=12):
+                    with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True, indent=12):
                         GUIHelpers.DisplayButtonHyperlink("Website", "https://greenchess.net/info.php?item=downloads")
                         GUIHelpers.DisplayButtonHyperlink("CC BY-SA 3.0 License", "https://creativecommons.org/licenses/by-sa/3.0/deed.en")
 
                 # Debugging UI
                 if Debug == True:
-                    with IMGUI.tab(label="Debug", tag="DebugTab"):
-                        IMGUI.add_spacer()
-                        
-                        with IMGUI.collapsing_header(label="Resource stats", default_open=True):
-                            with IMGUI.group(horizontal=True):
-                                with IMGUI.plot(label="CPU Usage", tag="CPUUsageGraph", width=(Globals.WindowSize[0] / 2) - 12):
-                                    XAxis = IMGUI.add_plot_axis(axis=IMGUI.mvXAxis, label="Time (seconds)", tag="CPUUsageXAxis")
-                                    YAxis = IMGUI.add_plot_axis(axis=IMGUI.mvYAxis, label="Usage (%)", tag="CPUUsageYAxis")
+                    """SysMonitors = get_monitors()
+                    WinPos = ModuleReferences.MODULE_REF_IMGUI.get_viewport_pos()
+    
+                    # Check which monitor the window is located on based on the viewport position
+                    for Monitor in SysMonitors:
+                        if Monitor.is_primary:
+                            # If the window's position is within the bounds of the primary monitor
+                            if (Monitor.x <= WinPos[0] < Monitor.x + Monitor.width) and (Monitor.y <= WinPos[1] < Monitor.y + Monitor.height):
+                                print(Monitor)"""
+
+                    with ModuleReferences.MODULE_REF_IMGUI.tab(label="Debug", tag="DebugTab"):
+                        with ModuleReferences.MODULE_REF_IMGUI.child_window(tag="DebugTabChildWindow", width=-1, height=-1):
+                            with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="Resource stats", default_open=True):
+                                with ModuleReferences.MODULE_REF_IMGUI.group(horizontal=True):
+                                    with ModuleReferences.MODULE_REF_IMGUI.plot(label="CPU Usage", tag="CPUUsageGraph", width=(Globals.WindowSize[0] / 2) - 12):
+                                        XAxis = ModuleReferences.MODULE_REF_IMGUI.add_plot_axis(axis=ModuleReferences.MODULE_REF_IMGUI.mvXAxis, label="Time (seconds)", tag="CPUUsageXAxis")
+                                        YAxis = ModuleReferences.MODULE_REF_IMGUI.add_plot_axis(axis=ModuleReferences.MODULE_REF_IMGUI.mvYAxis, label="Usage (%)", tag="CPUUsageYAxis")
+                                        
+                                        ModuleReferences.MODULE_REF_IMGUI.add_shade_series(x=[0], y1=[0], parent=YAxis, tag="CPUUsageLine")
+                                        ModuleReferences.MODULE_REF_IMGUI.set_axis_limits(axis=YAxis, ymin=0, ymax=100)
+                                        ModuleReferences.MODULE_REF_IMGUI.set_axis_limits_auto(XAxis)
+
+                                    with ModuleReferences.MODULE_REF_IMGUI.plot(label="Memory Usage", tag="MEMUsageGraph", width=(Globals.WindowSize[0] / 2) - 12):
+                                        XAxis = ModuleReferences.MODULE_REF_IMGUI.add_plot_axis(axis=ModuleReferences.MODULE_REF_IMGUI.mvXAxis, label="Time (seconds)", tag="MEMUsageXAxis")
+                                        YAxis = ModuleReferences.MODULE_REF_IMGUI.add_plot_axis(axis=ModuleReferences.MODULE_REF_IMGUI.mvYAxis, label="Usage (KB)", tag="MEMUsageYAxis")
+                                        
+                                        ModuleReferences.MODULE_REF_IMGUI.add_shade_series(x=[0], y1=[0], parent=YAxis, tag="MEMUsageLine")
+                                        ModuleReferences.MODULE_REF_IMGUI.set_axis_limits_auto(XAxis)
+
+                                with ModuleReferences.MODULE_REF_IMGUI.plot(label="FPS", tag="FPSGraph", width=(Globals.WindowSize[0] / 2) - 12):
+                                    XAxis = ModuleReferences.MODULE_REF_IMGUI.add_plot_axis(axis=ModuleReferences.MODULE_REF_IMGUI.mvXAxis, label="Time (seconds)", tag="FPSXAxis")
+                                    YAxis = ModuleReferences.MODULE_REF_IMGUI.add_plot_axis(axis=ModuleReferences.MODULE_REF_IMGUI.mvYAxis, label="FPS", tag="FPSYAxis")
                                     
-                                    IMGUI.add_shade_series(x=[0], y1=[0], parent=YAxis, tag="CPUUsageLine")
-                                    IMGUI.set_axis_limits(axis=YAxis, ymin=0, ymax=100)
-                                    IMGUI.set_axis_limits_auto(XAxis)
+                                    ModuleReferences.MODULE_REF_IMGUI.add_line_series(x=[0], y=[0], parent=YAxis, tag="FPSLine")
+                                    ModuleReferences.MODULE_REF_IMGUI.set_axis_limits_auto(XAxis)
+                                    ModuleReferences.MODULE_REF_IMGUI.set_axis_limits_auto(YAxis)
 
-                                with IMGUI.plot(label="Memory Usage", tag="MEMUsageGraph", width=(Globals.WindowSize[0] / 2) - 12):
-                                    XAxis = IMGUI.add_plot_axis(axis=IMGUI.mvXAxis, label="Time (seconds)", tag="MEMUsageXAxis")
-                                    YAxis = IMGUI.add_plot_axis(axis=IMGUI.mvYAxis, label="Usage (KB)", tag="MEMUsageYAxis")
-                                    
-                                    IMGUI.add_shade_series(x=[0], y1=[0], parent=YAxis, tag="MEMUsageLine")
-                                    IMGUI.set_axis_limits_auto(XAxis)
+                                ModuleReferences.MODULE_REF_IMGUI.add_spacer()
+                                ModuleReferences.MODULE_REF_IMGUI.add_spacer()
 
-                            IMGUI.add_spacer()
-                            IMGUI.add_spacer()
-
-                        with IMGUI.collapsing_header(label="Chess engine properties", default_open=True):
-                            IMGUI.add_text(f"Stockfish version: \"{ChessManager.ChessManager.EngineData[0]}\"", tag="DebugSFVersion", indent=12)
-                            IMGUI.add_text(f"Chess module version: \"{ChessManager.ChessManager.EngineData[1]}\"", tag="DebugChessVersion", indent=12)
+                            with ModuleReferences.MODULE_REF_IMGUI.collapsing_header(label="Chess engine properties", default_open=True):
+                                ModuleReferences.MODULE_REF_IMGUI.add_text(f"Stockfish version: \"{ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.EngineData[0]}\"", tag="DebugSFVersion", indent=12)
+                                ModuleReferences.MODULE_REF_IMGUI.add_text(f"Chess module version: \"{ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.EngineData[1]}\"", tag="DebugChessVersion", indent=12)
 
             # Draw a black square until the app finished loading
-            with IMGUI.window(width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], tag="BlackWindow", pos=[0, 0], no_title_bar=True, no_resize=True):
-                with IMGUI.theme() as IntroFadeTempTheme:
-                    with IMGUI.theme_component(IMGUI.mvAll):
-                        IMGUI.add_theme_color(IMGUI.mvThemeCol_WindowBg, [0, 0, 0, 255], tag="IntroFadeTempBGColor")
+            with ModuleReferences.MODULE_REF_IMGUI.window(width=IMGUIWindowSize[0], height=IMGUIWindowSize[1], tag="BlackWindow", pos=[0, 0], no_title_bar=True, no_resize=True, no_move=True):
+                with ModuleReferences.MODULE_REF_IMGUI.theme() as IntroFadeTempTheme:
+                    with ModuleReferences.MODULE_REF_IMGUI.theme_component(ModuleReferences.MODULE_REF_IMGUI.mvAll):
+                        ModuleReferences.MODULE_REF_IMGUI.add_theme_color(ModuleReferences.MODULE_REF_IMGUI.mvThemeCol_WindowBg, [0, 0, 0, 255], tag="IntroFadeTempBGColor")
 
-                IMGUI.bind_item_theme("BlackWindow", IntroFadeTempTheme)
+                ModuleReferences.MODULE_REF_IMGUI.bind_item_theme("BlackWindow", IntroFadeTempTheme)
 
         if Debug == True:
-            print(f"[DEBUG] >> Chess board piece locations: {ChessManager.ChessManager.BoardPieceLocations}")
+            print(f"[DEBUG] >> Chess board piece locations: {ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.BoardPieceLocations}")
 
+        print("[INFO] >> Setting up event handlers...")
+        with ModuleReferences.MODULE_REF_IMGUI.handler_registry():
+            ModuleReferences.MODULE_REF_IMGUI.add_mouse_wheel_handler(callback=GUI.ScrollHandler)
+
+        if Debug == True:
+            ModuleReferences.MODULE_REF_IMGUI.show_metrics()
+
+        AppConfig = ModuleReferences.MODULE_REF_IMGUI.get_app_configuration()
         Globals.GUIInitFinished.value = True
+        
+        print(f"[INFO] >> UI init done.\n[INFO] >> Running on device \"{AppConfig['device_name']}\" (device index {AppConfig['device']}).")
 
     # Main window loop, akin to Tkinter's mainloop
     def Mainloop(Debug=False):
@@ -611,96 +658,97 @@ Game Over mode:\n\tAll moves will be processed after the game\n\tends, which mea
         BGColor = [0, 0, 0, 255]
         FadeRM = 255 / FadeSteps
 
-        with IMGUI.theme() as IntroFadeTheme:
-            with IMGUI.theme_component(IMGUI.mvAll):
-                IntroFadeBG = IMGUI.add_theme_color(IMGUI.mvThemeCol_WindowBg, BGColor, tag="IntroFadeBGColor")
+        with ModuleReferences.MODULE_REF_IMGUI.theme() as IntroFadeTheme:
+            with ModuleReferences.MODULE_REF_IMGUI.theme_component(ModuleReferences.MODULE_REF_IMGUI.mvAll):
+                IntroFadeBG = ModuleReferences.MODULE_REF_IMGUI.add_theme_color(ModuleReferences.MODULE_REF_IMGUI.mvThemeCol_WindowBg, BGColor, tag="IntroFadeBGColor")
 
-        IMGUI.bind_item_theme("BlackWindow", IntroFadeTheme)
+        ModuleReferences.MODULE_REF_IMGUI.bind_item_theme("BlackWindow", IntroFadeTheme)
 
         for I in range(FadeSteps):
-            IMGUI.set_value(IntroFadeBG, BGColor)
-            IMGUI.render_dearpygui_frame()
+            ModuleReferences.MODULE_REF_IMGUI.set_value(IntroFadeBG, BGColor)
+            ModuleReferences.MODULE_REF_IMGUI.render_dearpygui_frame()
             time.sleep(FadeTime)
 
             BGColor[3] -= FadeRM
 
-        IMGUI.delete_item("BlackWindow")
+        ModuleReferences.MODULE_REF_IMGUI.delete_item("BlackWindow")
 
-        SettingsTabID = IMGUI.get_alias_id("SettingsTab")
-        GameTabID = IMGUI.get_alias_id("GameTab")
+        SettingsTabID = ModuleReferences.MODULE_REF_IMGUI.get_alias_id("SettingsTab")
+        GameTabID = ModuleReferences.MODULE_REF_IMGUI.get_alias_id("GameTab")
 
         if Debug == True:
-            IMGUI.set_value("DebugSFVersion", f"Stockfish version: \"{ChessManager.ChessManager.EngineData[0]}\"")
-            IMGUI.set_value("DebugChessVersion", f"Chess module version: {ChessManager.ChessManager.EngineData[1]}")
+            ModuleReferences.MODULE_REF_IMGUI.set_value("DebugSFVersion", f"Stockfish version: \"{ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.EngineData[0]}\"")
+            ModuleReferences.MODULE_REF_IMGUI.set_value("DebugChessVersion", f"Chess module version: {ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.EngineData[1]}")
 
-        while IMGUI.is_dearpygui_running():
-            # Only update the UI when the mouse moves, this reduces CPU usage
-            if IMGUI.get_mouse_pos() != GUI.LastMousePos or time.time() - LastUpdateTime >= GUI.ForcedUpdateInterval:
-                CurrentTab = IMGUI.get_value("MainTabBar")
+        while ModuleReferences.MODULE_REF_IMGUI.is_dearpygui_running():
+            # Only update the UI when the mouse moves (or it the UI should be forced to render), this reduces resource usage
+            if GUI.ForceUIRender == True or ModuleReferences.MODULE_REF_IMGUI.get_mouse_pos() != GUI.LastMousePos or time.time() - LastUpdateTime >= GUI.ForcedUpdateInterval:
+                GUI.ForceUIRender = False
                 LastUpdateTime = time.time()
+                CurrentTab = ModuleReferences.MODULE_REF_IMGUI.get_value("MainTabBar")
 
                 # Get the window size and automatically calculate the size of widgets
-                Globals.WindowSize = [IMGUI.get_viewport_client_width(), IMGUI.get_viewport_client_height()]
-                GUI.LastMousePos = IMGUI.get_mouse_pos()
+                Globals.WindowSize = [ModuleReferences.MODULE_REF_IMGUI.get_viewport_client_width(), ModuleReferences.MODULE_REF_IMGUI.get_viewport_client_height()]
+                GUI.LastMousePos = ModuleReferences.MODULE_REF_IMGUI.get_mouse_pos()
 
                 if GUI.ResetBoard == True:
-                    ChessManager.ChessManager.CurrentBoardState = ChessManager.ChessManager.DefaultBoardState
+                    ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.CurrentBoardState = ModuleReferences.MODULE_REF_CHESSMANAGER.BoardManager.DefaultBoardState
                     GUIHelpers.UpdateChessPieces(Debug)
                     GUI.ResetBoard = False
 
                 # Resize widgets if the window's size was changed
                 if GUI.WindowResized == True:
-                    ScrollbarSubtraction = Globals.WindowSize[0] - IMGUI.get_item_state("SettingsTab")['content_region_avail'][0]
+                    ScrollbarSubtraction = Globals.WindowSize[0] - ModuleReferences.MODULE_REF_IMGUI.get_item_state("SettingsTab")['content_region_avail'][0]
                     SliderAutoSizes = [Globals.WindowSize[0] - ScrollbarSubtraction - 186, Globals.WindowSize[0] - ScrollbarSubtraction - 207]
                     GUI.WindowResized = False
 
-                    IMGUI.set_item_width(GUI.MainWindow, Globals.WindowSize[0])
-                    IMGUI.set_item_height(GUI.MainWindow, Globals.WindowSize[1])
-                    IMGUI.set_item_width("PawnIntensityInput", SliderAutoSizes[0])
-                    IMGUI.set_item_width("PawnDurationInput", SliderAutoSizes[1])
-                    IMGUI.set_item_width("KnightIntensityInput", SliderAutoSizes[0])
-                    IMGUI.set_item_width("KnightDurationInput", SliderAutoSizes[1])
-                    IMGUI.set_item_width("BishopIntensityInput", SliderAutoSizes[0])
-                    IMGUI.set_item_width("BishopDurationInput", SliderAutoSizes[1])
-                    IMGUI.set_item_width("RookIntensityInput", SliderAutoSizes[0])
-                    IMGUI.set_item_width("RookDurationInput", SliderAutoSizes[1])
-                    IMGUI.set_item_width("QueenIntensityInput", SliderAutoSizes[0])
-                    IMGUI.set_item_width("QueenDurationInput", SliderAutoSizes[1])
-                    IMGUI.set_item_width("KingIntensityInput", SliderAutoSizes[0])
-                    IMGUI.set_item_width("KingDurationInput", SliderAutoSizes[1])
-                    IMGUI.set_item_height("MoveListTable", Globals.WindowSize[1] - 48)
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width(GUI.MainWindow, Globals.WindowSize[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_height(GUI.MainWindow, Globals.WindowSize[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("PawnIntensityInput", SliderAutoSizes[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("PawnDurationInput", SliderAutoSizes[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("KnightIntensityInput", SliderAutoSizes[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("KnightDurationInput", SliderAutoSizes[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("BishopIntensityInput", SliderAutoSizes[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("BishopDurationInput", SliderAutoSizes[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("RookIntensityInput", SliderAutoSizes[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("RookDurationInput", SliderAutoSizes[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("QueenIntensityInput", SliderAutoSizes[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("QueenDurationInput", SliderAutoSizes[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("KingIntensityInput", SliderAutoSizes[0])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_width("KingDurationInput", SliderAutoSizes[1])
+                    ModuleReferences.MODULE_REF_IMGUI.set_item_height("MoveListTable", Globals.WindowSize[1] - 48)
 
                     if Debug == True:
-                        IMGUI.set_item_width("CPUUsageGraph", (Globals.WindowSize[0] / 2) - 12)
-                        IMGUI.set_item_width("MEMUsageGraph", (Globals.WindowSize[0] / 2) - 12)
-                        IMGUI.set_item_height("CPUUsageGraph", Globals.WindowSize[1] - 192)
-                        IMGUI.set_item_height("MEMUsageGraph", Globals.WindowSize[1] - 192)
+                        ModuleReferences.MODULE_REF_IMGUI.set_item_width("CPUUsageGraph", (Globals.WindowSize[0] / 2) - 12)
+                        ModuleReferences.MODULE_REF_IMGUI.set_item_width("MEMUsageGraph", (Globals.WindowSize[0] / 2) - 12)
+                        ModuleReferences.MODULE_REF_IMGUI.set_item_height("CPUUsageGraph", Globals.WindowSize[1] - 192)
+                        ModuleReferences.MODULE_REF_IMGUI.set_item_height("MEMUsageGraph", Globals.WindowSize[1] - 192)
 
                 # Show piece property settings if their checkboxes are checked
                 if CurrentTab == SettingsTabID:
-                    GUIHelpers.ShowHideItemWithBoolean(IMGUI.get_value("PawnEnableCheckbox"), "PawnProperties")
-                    GUIHelpers.ShowHideItemWithBoolean(IMGUI.get_value("KnightEnableCheckbox"), "KnightProperties")
-                    GUIHelpers.ShowHideItemWithBoolean(IMGUI.get_value("BishopEnableCheckbox"), "BishopProperties")
-                    GUIHelpers.ShowHideItemWithBoolean(IMGUI.get_value("RookEnableCheckbox"), "RookProperties")
-                    GUIHelpers.ShowHideItemWithBoolean(IMGUI.get_value("QueenEnableCheckbox"), "QueenProperties")
-                    GUIHelpers.ShowHideItemWithBoolean(IMGUI.get_value("KingEnableCheckbox"), "KingProperties")
+                    GUIHelpers.ShowHideItemWithBoolean(ModuleReferences.MODULE_REF_IMGUI.get_value("PawnEnableCheckbox"), "PawnProperties")
+                    GUIHelpers.ShowHideItemWithBoolean(ModuleReferences.MODULE_REF_IMGUI.get_value("KnightEnableCheckbox"), "KnightProperties")
+                    GUIHelpers.ShowHideItemWithBoolean(ModuleReferences.MODULE_REF_IMGUI.get_value("BishopEnableCheckbox"), "BishopProperties")
+                    GUIHelpers.ShowHideItemWithBoolean(ModuleReferences.MODULE_REF_IMGUI.get_value("RookEnableCheckbox"), "RookProperties")
+                    GUIHelpers.ShowHideItemWithBoolean(ModuleReferences.MODULE_REF_IMGUI.get_value("QueenEnableCheckbox"), "QueenProperties")
+                    GUIHelpers.ShowHideItemWithBoolean(ModuleReferences.MODULE_REF_IMGUI.get_value("KingEnableCheckbox"), "KingProperties")
 
                 # Add the moves to the move list table
                 if CurrentTab == GameTabID and GUI.MovesUpdated == True:
                     GUI.MovesUpdated = False
 
                     if len(GUI.MoveList) > 0:
-                        IMGUI.delete_item("MoveListTable", children_only=True)
+                        ModuleReferences.MODULE_REF_IMGUI.delete_item("MoveListTable", children_only=True)
                         GUIHelpers.RemakeMoveTable()
 
                     for Move in reversed(GUI.MoveList):
-                        with IMGUI.table_row(parent="MoveListTable"):
-                            IMGUI.add_text(Move["MoveNumber"])
-                            IMGUI.add_text(Move["Color"])
-                            IMGUI.add_text(Move["Player"])
-                            IMGUI.add_text(Move["FromPos"])
-                            IMGUI.add_text(Move["ToPos"])
-                            IMGUI.add_text(Move["Quality"])
+                        with ModuleReferences.MODULE_REF_IMGUI.table_row(parent="MoveListTable"):
+                            ModuleReferences.MODULE_REF_IMGUI.add_text(Move["MoveNumber"])
+                            ModuleReferences.MODULE_REF_IMGUI.add_text(Move["Color"])
+                            ModuleReferences.MODULE_REF_IMGUI.add_text(Move["Player"])
+                            ModuleReferences.MODULE_REF_IMGUI.add_text(Move["FromPos"])
+                            ModuleReferences.MODULE_REF_IMGUI.add_text(Move["ToPos"])
+                            ModuleReferences.MODULE_REF_IMGUI.add_text(Move["Quality"])
 
                     GUIHelpers.UpdateChessPieces(Debug)
 
@@ -714,13 +762,13 @@ Game Over mode:\n\tAll moves will be processed after the game\n\tends, which mea
                     if MB.MBClosed == True:
                         GUI.MessageBoxes.remove(MB)
 
-                IMGUI.render_dearpygui_frame()
+                ModuleReferences.MODULE_REF_IMGUI.render_dearpygui_frame()
             
             else:
                 time.sleep(GUI.ForcedUpdateInterval)
 
             if Debug == True:
-                if IMGUI.get_frame_count() % 60 == 0:
+                if ModuleReferences.MODULE_REF_IMGUI.get_frame_count() % 60 == 0:
                     GUIHelpers.CommunicateWithStatsThread()
 
                 if LastDebugPlotUpdateTime == 0 or time.time() - LastDebugPlotUpdateTime >= Globals.DebugChartInterval.value:
@@ -728,22 +776,30 @@ Game Over mode:\n\tAll moves will be processed after the game\n\tends, which mea
                     GUI.DebugXAxisTimeValues.append(LastDebugPlotUpdateTime - Globals.BootTime)
                     GUI.CPUData.append(Globals.CPUUsage.value)
                     GUI.MEMData.append(Globals.MEMUsage.value)
+                    GUI.FPSData.append(ModuleReferences.MODULE_REF_IMGUI.get_frame_rate())
 
                     if len(GUI.CPUData) >= 10:
                         GUI.DebugXAxisTimeValues = GUI.DebugXAxisTimeValues[1:]
                         GUI.CPUData = GUI.CPUData[1:]
                         GUI.MEMData = GUI.MEMData[1:]
+                        GUI.FPSData = GUI.FPSData[1:]
 
-                    IMGUI.set_axis_limits(axis="MEMUsageYAxis", ymin=0, ymax=Globals.AllocatedMEM.value)
-                    IMGUI.configure_item("CPUUsageLine", x=GUI.DebugXAxisTimeValues)
-                    IMGUI.configure_item("CPUUsageLine", y1=GUI.CPUData)
-                    IMGUI.configure_item("MEMUsageLine", x=GUI.DebugXAxisTimeValues)
-                    IMGUI.configure_item("MEMUsageLine", y1=GUI.MEMData)
-                    IMGUI.fit_axis_data("CPUUsageXAxis")
-                    IMGUI.fit_axis_data("MEMUsageXAxis")
+                    ModuleReferences.MODULE_REF_IMGUI.set_axis_limits(axis="MEMUsageYAxis", ymin=0, ymax=Globals.AllocatedMEM.value)
+                    ModuleReferences.MODULE_REF_IMGUI.configure_item("CPUUsageLine", x=GUI.DebugXAxisTimeValues)
+                    ModuleReferences.MODULE_REF_IMGUI.configure_item("CPUUsageLine", y1=GUI.CPUData)
+                    ModuleReferences.MODULE_REF_IMGUI.configure_item("MEMUsageLine", x=GUI.DebugXAxisTimeValues)
+                    ModuleReferences.MODULE_REF_IMGUI.configure_item("MEMUsageLine", y1=GUI.MEMData)
+                    ModuleReferences.MODULE_REF_IMGUI.configure_item("FPSLine", x=GUI.DebugXAxisTimeValues)
+                    ModuleReferences.MODULE_REF_IMGUI.configure_item("FPSLine", y=GUI.FPSData)
+                    ModuleReferences.MODULE_REF_IMGUI.fit_axis_data("CPUUsageXAxis")
+                    ModuleReferences.MODULE_REF_IMGUI.fit_axis_data("MEMUsageXAxis")
+                    ModuleReferences.MODULE_REF_IMGUI.fit_axis_data("FPSXAxis")
+                    ModuleReferences.MODULE_REF_IMGUI.fit_axis_data("FPSYAxis")
+
+        ModuleReferences.MODULE_REF_SETTINGSMANAGER.SettingsManager.SaveSettings(Debug)
 
         print("[INFO] >> Destroying IMGUI context...")
-        IMGUI.destroy_context()
+        ModuleReferences.MODULE_REF_IMGUI.destroy_context()
 
         print("[INFO] >> Viewport closed.")
         Globals.MainViewportIsOpen.value = False

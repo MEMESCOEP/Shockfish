@@ -4,19 +4,17 @@
 
 ## IMPORTS ##
 import dearpygui.dearpygui as IMGUI
-import PiShockManager
+import Settings as SettingsManager
 import multiprocessing
+import PiShockManager
 import ChessManager
-import faulthandler
 import tracemalloc
 import traceback
 import datetime
 import requests
 import Globals
-import pishock
 import psutil
 import signal
-import chess
 import time
 import sys
 import UI
@@ -30,42 +28,40 @@ class Tee:
         Self.file_objects = FileObjects
 
     def write(Self, Message):
-        try:
-            for File in Self.file_objects:
-                # Check if the message should be written to the console or to a file
-                if File is sys.stdout:
-                    if IsConsoleAvailable == True:
-                        sys.__stdout__.write(Message)
+        for File in Self.file_objects:
+            if File == None:
+                continue
 
-                else:
-                    File.write(Message)
-                    Self.flush()
+            # Check if the message should be written to the console or to a file
+            if IsConsoleAvailable == True and File is sys.stdout:
+                sys.__stdout__.write(Message)
 
-        except:
-            pass
+            else:
+                File.write(Message)
+                Self.flush()
 
     def flush(Self):
-        try:
+        if IsConsoleAvailable == True :
             sys.__stdout__.flush()
 
-            for File in Self.file_objects:
-                File.flush()
+        for File in Self.file_objects:
+            if File == None:
+                continue
 
-        except:
-            pass
+            File.flush()
 
 
 ## VARIABLES ##
 SelectableGameModes = ["Realtime", "GameOver"]
 RealtimeRequestURL = "https://api.chess.com/pub/player/<USERNAME>/games"
-ArchivesRequestURL = f"{RealtimeRequestURL}/archives"
-IsConsoleAvailable = sys.stdout.isatty()
+ArchivesRequestURL = f"{RealtimeRequestURL}{Globals.PathSeparator}archives"
+IsConsoleAvailable = sys.stdout.isatty() if sys.stdout else False
 ShockersToControl = 1
 CurrentGameMode = SelectableGameModes[1]
 RequestHeaders = {"User-Agent": "Shockfish/1.0"}
 PlayerUsername = "memescoep"
 ProgramVersion = "0.1"
-OutputLogPath = os.path.join(Globals.MainProgramPath, f"Logs/{datetime.datetime.now().strftime("%m-%d-%Y_%I-%M-%S-%p")}.log")
+OutputLogPath = os.path.join(Globals.MainProgramPath, "Logs", f"{datetime.datetime.now().strftime("%m-%d-%Y_%I-%M-%S-%p")}.log")
 SkipIteration = False
 ThreadsToKill = []
 ExitCode = 0
@@ -80,8 +76,8 @@ def QuitApplication(ExitCode = 0):
 
     print(f"[INFO] >> Stopping threads ands exiting with code {ExitCode}...")
 
-    if ChessManager.ChessManager.ChessEngine != None:
-        ChessManager.ChessManager.ChessEngine.quit()
+    if ChessManager.BoardManager.ChessEngine != None:
+        ChessManager.BoardManager.ChessEngine.quit()
 
     for Thread in ThreadsToKill:
         if Thread == None or isinstance(Thread, multiprocessing.Process) == False:
@@ -201,27 +197,30 @@ def StatsThread(LogFilePath, DebugInterval=5.0, InDepthMessages=False, InDepthMe
         print(f"[ERROR] >> {EX}")
         traceback.print_exc()
 
-def trace_calls(frame, event, arg):
+def TraceCalls(Frame, Event, Arg):
     try:
-        # This function will be called on every event
-        if event == "call":
-            print(f"Calling function: {frame.f_code.co_name}")
+        if Event == "call":
+            print(f"Calling function: {Frame.f_code.co_name}")
 
-        elif event == "line":
-            print(f"Executing line {frame.f_lineno}")
+        elif Event == "line":
+            print(f"Executing line {Frame.f_lineno}")
 
-        elif event == "return":
-            print(f"Returning from function: {frame.f_code.co_name} with value: {arg}")
+        elif Event == "return":
+            print(f"Returning from function: {Frame.f_code.co_name} with value: {Arg}")
 
     except Exception as EX:
         print(f"[ERROR] >> {EX}")
         traceback.print_exc()
 
-    return trace_calls
+    return TraceCalls
 
 
 ## MAIN CODE ##
 if __name__ == "__main__":
+    # Kill the 2nd instance of the app if we run from the console
+    if any("parent_pid=" in Item for Item in sys.argv):
+        sys.exit(0)
+
     print("[== SHOCKFISH ==]")
 
     for Arg in sys.argv[1:]:
@@ -250,7 +249,7 @@ if __name__ == "__main__":
                 print(f"[INFO] >> PiShock URL has been changed to \"{PiShockManager.ZapManager.PiShockURL}\".")
 
             case "--DebugStatsInterval":
-                if ArgIndex > len(sys.argv) - 2 or sys.argv[ArgIndex + 1].startswith("--") or sys.argv[ArgIndex + 1].replace('.','',1).isdigit() == False:
+                if ArgIndex > len(sys.argv) - 2 or sys.argv[ArgIndex + 1].startswith("--") or sys.argv[ArgIndex + 1].replace('.', '' ,1).isdigit() == False:
                     print("[ERROR] >> Argument \"--DebugStatsInterval\" requires a decimal value.")
                     sys.exit(-996)
 
@@ -258,6 +257,9 @@ if __name__ == "__main__":
                 Globals.DebugStatsInterval.value = float(sys.argv[ArgIndex + 1])
 
             case "--Help" | _:
+                if Arg != "--Help":
+                    print(f"[WARN] >> Invalid argument \"{Arg}\".\n")
+
                 print("Available arguments:\n1. --Debug: enables debug mode\n2. --Version: shows the program version and exits\n3. --PiShockURL <url>: sets the API url that Shockfish will try to communicate with\n4. --DebugStatsInterval <integer, 0.001, infinity>: Sets the interval at which debug statistics are printed\n")
                 sys.exit(-995)
 
@@ -275,12 +277,7 @@ if __name__ == "__main__":
 
     sys.stdout = Tee(sys.stdout, open(OutputLogPath, "a"))
 
-    print("[INFO] >> Enabling program code tracing...")
-    #sys.settrace(trace_calls)
-
-    print("[INFO] >> Setting up signal handlers (SIGSEGV, SIGINT)...")
-    #faulthandler.enable(all_threads=True)
-    #signal.signal(signal.SIGSEGV, OSSignalHandler)
+    print("[INFO] >> Setting up signal handlers...")
     signal.signal(signal.SIGINT, OSSignalHandler)
 
     # sys._MEIPASS is only created whith pyinstaller, not Nuitka
@@ -288,6 +285,11 @@ if __name__ == "__main__":
         print(f"[INFO] >> sys._MEIPASS exists: \"{sys._MEIPASS}\"")
         print("[INFO] >> sys._MEIPASS exists, so pyi_splash will be imported.")
         import pyi_splash
+
+        # Only hide the console if debugging is disabled, the exe wasn't launched from a terminal, and this is running on windows
+        if Debug == False and IsConsoleAvailable == True and sys.stdin.isatty() == False and sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
 
     print(f"[INFO] >> Current CWD: \"{Globals.CurrentCWDPath}\"")
     print(f"[INFO] >> Executable: \"{sys.argv[0]}\"")
@@ -302,8 +304,9 @@ if __name__ == "__main__":
         StatsProc.start()
     
     try:
-        # Make sure the stockfish path is updated when this is running on Windows
-        Globals.UpdateStockfishPathFromPlatform(Globals.CurrentPlatform)
+        SettingsManager.SettingsManager.PassReferences(PiShockManager, IMGUI, UI)
+        ChessManager.BoardManager.PassReferences(IMGUI, UI)
+        UI.ModuleReferences.PassReferences(SettingsManager, PiShockManager, ChessManager, IMGUI)
 
         # Initialize and set up the GUI
         print("[INFO] >> Initializing DearPyGui (IMGUI)...")
@@ -313,8 +316,11 @@ if __name__ == "__main__":
         if hasattr(sys, "_MEIPASS"):
             pyi_splash.close()
 
+        # Read the settings file
+        SettingsManager.SettingsManager.LoadSettings(Debug)
+        
         # Initialize the chess manager
-        ChessManager.ChessManager.Init(Debug)
+        ChessManager.BoardManager.Init(Debug)
 
         """match CurrentGameMode:
             # This mode is selected if the game status should be checked in real time.

@@ -1,5 +1,5 @@
-dearpygui
 dearpygui_extend
+dearpygui
 requests
 pishock
 pillow

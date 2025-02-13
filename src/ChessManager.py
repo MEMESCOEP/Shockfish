@@ -6,17 +6,15 @@
 from chessdotcom import ChessDotComClient, Client, get_player_game_archives
 from zipfile import ZipFile
 from enum import Enum
-import dearpygui.dearpygui as IMGUI
 import multiprocessing
 import traceback
 import requests
-import Globals
 import tarfile
+import Globals
 import chess.engine
 import chess.pgn
 import time
 import sys
-import UI
 import io
 import os
 
@@ -30,8 +28,20 @@ class ChessPieces(Enum):
     Pawn = 1
     Rook = 5
 
-class ChessManager:
-    ## VARIABLES ##
+class BoardManager:
+    ## VARIABLES ## 
+    MODULE_REF_IMGUI = None
+    MODULE_REF_UI = None
+
+    ChessPieceFSMappings = [
+        ("Bishop.png", ChessPieces.King),
+        ("Knight.png", ChessPieces.Knight),
+        ("Queen.png", ChessPieces.Queen),
+        ("King.png", ChessPieces.King),
+        ("Pawn.png", ChessPieces.Pawn),
+        ("Rook.png", ChessPieces.Rook)
+    ]
+
     BoardPieceLocations = []
     CurrentBoardState = []
     DefaultBoardState = []
@@ -60,12 +70,16 @@ class ChessManager:
 
 
     ## FUNCTIONS ##
+    def PassReferences(IMGUI, UI):
+        BoardManager.MODULE_REF_IMGUI = IMGUI
+        BoardManager.MODULE_REF_UI = UI
+
     def Init(Debug=True):
         CurrentColor = 1
 
         # Initialize the Chess.com client and its headers
         print("[INFO] >> Setting up Chess.com client...")
-        ChessManager.ChessClient = ChessDotComClient(user_agent = "Shockfish")
+        BoardManager.ChessClient = ChessDotComClient(user_agent = "Shockfish")
 
         # Set up the Chess.com client's request headers (required for requests to work)
         Client.request_config["headers"]["User-Agent"] = (
@@ -74,25 +88,26 @@ class ChessManager:
         )
 
         # Check if Stockfish exists on the disk
-        if ChessManager.DoesStockfishExist(Globals.StockfishPath) == False:
+        if BoardManager.DoesStockfishExist(Globals.StockfishPath) == False:
             print(f"[ERROR] >> Failed to find Stockfish at \"{Globals.StockfishPath}\".")
-            NewMessageBox = UI.MessageBox()
+            NewMessageBox = BoardManager.MODULE_REF_UI.MessageBox()
             NewMessageBox.Title = "Error - Chess manager"
             NewMessageBox.Message = f"Stockfish wasn't found at \"{Globals.StockfishPath}\".\n\nWould you like to download the latest stockfish release now?"
-            NewMessageBox.Buttons = UI.MessageBoxButtons.YesNo
+            NewMessageBox.Buttons = BoardManager.MODULE_REF_UI.MessageBoxButtons.YesNo
             NewMessageBox.Actions[False] = lambda: (_ for _ in ()).throw(FileNotFoundError("Stockfish doesn't exist at the specified path, or it exists but isn't a file."))
 
-            UI.GUIHelpers.DisplayMessageBoxObject(NewMessageBox, ForceRender=True)
+            BoardManager.MODULE_REF_UI.GUIHelpers.DisplayMessageBoxObject(NewMessageBox, ForceRender=True)
 
             # The download should happen in this thread, we can't use a messagebox action for that
-            with IMGUI.window(label="Downloading and extracting stockfish...", tag="DLEWindow", pos=((IMGUI.get_viewport_width() / 2) - 160, (IMGUI.get_viewport_height() / 2) - 50), width=320, height=50, no_close=True, no_collapse=True, no_move=True, no_resize=True):
-                IMGUI.add_text("Please wait while stockfish is downloaded and\nextracted, it shouldn't take too long..")
-                IMGUI.add_progress_bar(tag="DLEProgressBar", overlay="0%", default_value=0.0, width=-1)
+            with BoardManager.MODULE_REF_IMGUI.window(label="Downloading and extracting stockfish...", tag="DLEWindow", pos=((BoardManager.MODULE_REF_IMGUI.get_viewport_width() / 2) - 160, (BoardManager.MODULE_REF_IMGUI.get_viewport_height() / 2) - 50), width=320, height=50, no_close=True, no_collapse=True, no_move=True, no_resize=True):
+                BoardManager.MODULE_REF_IMGUI.add_text("Please wait while stockfish is downloaded and\nextracted, it shouldn't take too long...")
+                BoardManager.MODULE_REF_IMGUI.add_progress_bar(tag="DLEProgressBar", overlay="Initializing...", default_value=0.0, width=-1)
             
-            IMGUI.render_dearpygui_frame()
+            BoardManager.MODULE_REF_IMGUI.render_dearpygui_frame()
             
             ArchiveType = "zip" if Globals.CurrentPlatform == "windows" else "tar"
             DownloadURL = Globals.StockfishURL.replace("<ARCHIVE_TYPE>", ArchiveType).replace("<OS>", Globals.CurrentPlatform)
+            ExtractPath = os.path.join(Globals.MainProgramPath, os.path.dirname(Globals.StockfishPath))
             ArchivePath = Globals.SFArchivePath.replace("<ARCHIVE_TYPE>", ArchiveType)
             OldEXEName = DownloadURL.split("/")[-1].split(".")[0] + (".exe" if Globals.CurrentPlatform == "windows" else "")
             
@@ -110,18 +125,17 @@ class ChessManager:
                                 Downloaded += len(Chunk)
                                 Progress = round((Downloaded / ArchiveSize) * 100, 2)
 
-                                IMGUI.set_value("DLEProgressBar", Progress / 100)
-                                IMGUI.configure_item("DLEProgressBar", overlay=f"Downloading ({Progress}%)")
-                                IMGUI.focus_item("DLEWindow")
+                                BoardManager.MODULE_REF_IMGUI.set_value("DLEProgressBar", Progress / 100)
+                                BoardManager.MODULE_REF_IMGUI.configure_item("DLEProgressBar", overlay=f"Downloading ({Progress}%)")
+                                BoardManager.MODULE_REF_IMGUI.focus_item("DLEWindow")
 
                                 if Progress % 0.5 == 0:
-                                    IMGUI.render_dearpygui_frame()
+                                    BoardManager.MODULE_REF_IMGUI.render_dearpygui_frame()
 
             if Globals.CurrentPlatform == "windows":
                 with ZipFile(ArchivePath, 'r') as ArchiveFile:
                     FilesToExtract = ArchiveFile.namelist()
                     ExtractedCount = 0
-                    ExtractPath = os.path.dirname(Globals.StockfishPath)
                     FileInZIP = ""
                     FileCount = len(FilesToExtract)
 
@@ -147,43 +161,46 @@ class ChessManager:
                         ExtractedCount += 1
                         Progress = round((ExtractedCount / FileCount) * 100, 2)
 
-                        IMGUI.set_value("DLEProgressBar", Progress / 100)
-                        IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
-                        IMGUI.focus_item("DLEWindow")
-                        IMGUI.render_dearpygui_frame()
+                        BoardManager.MODULE_REF_IMGUI.set_value("DLEProgressBar", Progress / 100)
+                        BoardManager.MODULE_REF_IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
+                        BoardManager.MODULE_REF_IMGUI.focus_item("DLEWindow")
+                        BoardManager.MODULE_REF_IMGUI.render_dearpygui_frame()
 
             else:
                 with tarfile.open(ArchivePath, 'r') as ArchiveFile:
                     FilesToExtract = ArchiveFile.getmembers()
                     ExtractedCount = 0
-                    ExtractPath = os.path.dirname(Globals.StockfishPath)
                     FileCount = len(FilesToExtract)
 
                     print(f"[INFO] >> Extracting {FileCount} file(s) to \"{ExtractPath}\"...")
 
                     for File in FilesToExtract:
-                        ArchiveFile.extract(File, path=".")
+                        ArchiveFile.extract(File, path=Globals.MainProgramPath)
 
                         ExtractedCount += 1
                         Progress = round((ExtractedCount / FileCount) * 100, 2)
 
-                        IMGUI.set_value("DLEProgressBar", Progress / 100)
-                        IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
-                        IMGUI.focus_item("DLEWindow")
-                        IMGUI.render_dearpygui_frame()
+                        BoardManager.MODULE_REF_IMGUI.set_value("DLEProgressBar", Progress / 100)
+                        BoardManager.MODULE_REF_IMGUI.configure_item("DLEProgressBar", overlay=f"Extracting ({Progress}%)")
+                        BoardManager.MODULE_REF_IMGUI.focus_item("DLEWindow")
+                        BoardManager.MODULE_REF_IMGUI.render_dearpygui_frame()
 
-                os.rename("stockfish", "Stockfish")
+                print("RENAME DIR")
+                os.rename(os.path.join(Globals.MainProgramPath, "stockfish"), ExtractPath)
 
-            os.rename(f"Stockfish/{OldEXEName}", f"Stockfish/{OldEXEName.replace('-' + Globals.CurrentPlatform, '')}")            
+            print("RENAME EXE")
+            os.rename(os.path.join(Globals.MainProgramPath, "Stockfish", OldEXEName), os.path.join(Globals.MainProgramPath, "Stockfish", OldEXEName.replace('-' + Globals.CurrentPlatform, '')))   
+
+            print("REMOVE")         
             os.remove(ArchivePath)
-            IMGUI.delete_item("DLEWindow")
+            BoardManager.MODULE_REF_IMGUI.delete_item("DLEWindow")
 
         print("[INFO] >> Initializing stockfish...")
-        print(f"[INFO] >> Chess engine board analysis can take a maximum of {ChessManager.AnalyseTimeLimit} seconds, has a max depth of {ChessManager.AnalysisDepthLimit}, and will use {ChessManager.AnalysisThreadCount} thread(s).")
-        ChessManager.ChessEngine = chess.engine.SimpleEngine.popen_uci(Globals.StockfishPath)
-        ChessManager.ChessEngine.configure({"Threads": ChessManager.AnalysisThreadCount})
-        ChessManager.ChessEngine.configure({"Hash": 8})
-        ChessManager.EngineData = [ChessManager.ChessEngine.id['name'], chess.__version__, chess.__spec__]
+        print(f"[INFO] >> Chess engine board analysis can take a maximum of {BoardManager.AnalyseTimeLimit} seconds, has a max depth of {BoardManager.AnalysisDepthLimit}, and will use {BoardManager.AnalysisThreadCount} thread(s).")
+        BoardManager.ChessEngine = chess.engine.SimpleEngine.popen_uci(Globals.StockfishPath)
+        BoardManager.ChessEngine.configure({"Threads": BoardManager.AnalysisThreadCount})
+        BoardManager.ChessEngine.configure({"Hash": 8})
+        BoardManager.EngineData = [BoardManager.ChessEngine.id['name'], chess.__version__, chess.__spec__]
 
         for Y in range(8):
             PieceColorIndex = 0 if Y > 4 else 1
@@ -193,23 +210,23 @@ class ChessManager:
                 CurrentColor = not CurrentColor
 
                 if Y == 1 or Y == 6:
-                    ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}Pawn", "Pos": ChessManager.BoardPosNames[Y][X]})
+                    BoardManager.DefaultBoardState.append({"Piece": f"{BoardManager.ChessPieceColors[PieceColorIndex]}Pawn", "Pos": BoardManager.BoardPosNames[Y][X]})
 
                 elif Y == 0 or Y == 7:
                     if X == 0 or X == 7:
-                        ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}Rook", "Pos": ChessManager.BoardPosNames[Y][X]})
+                        BoardManager.DefaultBoardState.append({"Piece": f"{BoardManager.ChessPieceColors[PieceColorIndex]}Rook", "Pos": BoardManager.BoardPosNames[Y][X]})
 
                     elif X == 1 or X == 6:
-                        ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}Knight", "Pos": ChessManager.BoardPosNames[Y][X]})
+                        BoardManager.DefaultBoardState.append({"Piece": f"{BoardManager.ChessPieceColors[PieceColorIndex]}Knight", "Pos": BoardManager.BoardPosNames[Y][X]})
 
                     elif X == 2 or X == 5:
-                        ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}Bishop", "Pos": ChessManager.BoardPosNames[Y][X]})
+                        BoardManager.DefaultBoardState.append({"Piece": f"{BoardManager.ChessPieceColors[PieceColorIndex]}Bishop", "Pos": BoardManager.BoardPosNames[Y][X]})
 
                     elif X == 3:
-                        ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}Queen", "Pos": ChessManager.BoardPosNames[Y][X]})
+                        BoardManager.DefaultBoardState.append({"Piece": f"{BoardManager.ChessPieceColors[PieceColorIndex]}Queen", "Pos": BoardManager.BoardPosNames[Y][X]})
 
                     elif X == 4:
-                        ChessManager.DefaultBoardState.append({"Piece": f"{ChessManager.ChessPieceColors[PieceColorIndex]}King", "Pos": ChessManager.BoardPosNames[Y][X]})
+                        BoardManager.DefaultBoardState.append({"Piece": f"{BoardManager.ChessPieceColors[PieceColorIndex]}King", "Pos": BoardManager.BoardPosNames[Y][X]})
 
     # Check if Stockfish exists on the disk
     def DoesStockfishExist(StockfishPath):
@@ -219,8 +236,8 @@ class ChessManager:
     
     # Load a game fro ma PGN file. Call this function as a callback of a button
     def UILoadPGN(Debug=False):
-        NewFileDialog = UI.FileDialog(Title="Open PGN File", ValidExstensions=[{'label': 'All files', 'formats': ['*']}, {'label': 'PGN files', 'formats': ['pgn']}], DefaultExtension=1)
-        NewFileDialog.FileSelectedAction = ChessManager.LoadPGNFromFile
+        NewFileDialog = BoardManager.MODULE_REF_UI.FileDialog(Title="Open PGN File", ValidExstensions=[{'label': 'All files', 'formats': ['*']}, {'label': 'PGN files', 'formats': ['pgn']}], DefaultExtension=1)
+        NewFileDialog.FileSelectedAction = BoardManager.LoadPGNFromFile
         NewFileDialog.PassDebug = Debug
         NewFileDialog.Show()
 
@@ -230,13 +247,13 @@ class ChessManager:
             # Double check that the file actually exists
             print(f"[INFO] >> Loading PGN from file \"{Filename}\"...")
             with open(Filename, 'r') as PGNFile:
-                ChessManager.CurrentPGN = PGNFile.read()
+                BoardManager.CurrentPGN = PGNFile.read()
 
-            print(f"[INFO] >> Finished loading PGN with size of ~{(sys.getsizeof(ChessManager.CurrentPGN) / 1024):.2f} KB, clear to begin parsing.")
-            ChessManager.ParsePGN(ChessManager.CurrentPGN, Debug)
+            print(f"[INFO] >> Finished loading PGN with size of ~{(sys.getsizeof(BoardManager.CurrentPGN) / 1024):.2f} KB, clear to begin parsing.")
+            BoardManager.ParsePGN(BoardManager.CurrentPGN, Debug)
 
         except Exception as EX:
-            UI.GUIHelpers.DisplayMessageBox("Error - Chess Manager", f"Failed to open the PGN file: {EX}")
+            BoardManager.MODULE_REF_UI.GUIHelpers.DisplayMessageBox("Error - Chess Manager", f"Failed to open the PGN file: {EX}")
 
             if Debug == True:
                 traceback.print_exc()
@@ -250,31 +267,31 @@ class ChessManager:
         if Debug == True:
             print(f"[DEBUG] >> Move evaluation: {Color} * ({CurrentCPScore} - {PreviousCPScore}) = {ScoreDifference}")
 
-        if ScoreDifference >= ChessManager.ScoreThresholds[0]:
+        if ScoreDifference >= BoardManager.ScoreThresholds[0]:
             return "Good"
         
-        elif ScoreDifference > ChessManager.ScoreThresholds[1] and ScoreDifference < ChessManager.ScoreThresholds[0]:
+        elif ScoreDifference > BoardManager.ScoreThresholds[1] and ScoreDifference < BoardManager.ScoreThresholds[0]:
             return "Neutral"
         
-        elif ScoreDifference <= ChessManager.ScoreThresholds[2]:
+        elif ScoreDifference <= BoardManager.ScoreThresholds[2]:
             return "Terrible"
         
-        elif ScoreDifference <= ChessManager.ScoreThresholds[1]:
+        elif ScoreDifference <= BoardManager.ScoreThresholds[1]:
             return "Bad"
 
     # Parse a PGN string to determine the state of the game
     def ParsePGN(PGNString, Debug=False):
         print("[INFO] >> Parsing PGN string...")
 
-        with IMGUI.window(label="Parsing PGN string...", tag="PGNWindow", width=320, height=50, pos=((IMGUI.get_viewport_width() / 2) - 160, (IMGUI.get_viewport_height() / 2) - 50), no_move=True, no_resize=True, no_close=True, no_collapse=True):
-            IMGUI.add_text("Please wait while the PGN string is parsed, it\nshouldn't take too long...")
-            IMGUI.add_progress_bar(tag="PGNProgressBar", default_value=0.0, width=-1)
+        with BoardManager.MODULE_REF_IMGUI.window(label="Parsing PGN string...", tag="PGNWindow", width=320, height=50, pos=((BoardManager.MODULE_REF_IMGUI.get_viewport_width() / 2) - 160, (BoardManager.MODULE_REF_IMGUI.get_viewport_height() / 2) - 50), no_move=True, no_resize=True, no_close=True, no_collapse=True):
+            BoardManager.MODULE_REF_IMGUI.add_text("Please wait while the PGN string is parsed, it\nshouldn't take too long...")
+            BoardManager.MODULE_REF_IMGUI.add_progress_bar(tag="PGNProgressBar", default_value=0.0, width=-1)
 
         if PGNString == None or len(PGNString) <= 0:
             if Debug == True:
                 print("[DEBUG] >> PGN string is null or empty.")
 
-            ChessManager.CurrentBoardState = ChessManager.DefaultBoardState
+            BoardManager.CurrentBoardState = BoardManager.DefaultBoardState
             return
         
         else:
@@ -282,9 +299,9 @@ class ChessManager:
                 print("[DEBUG] >> Clearing move list, resetting chess board, and clearing current board state...")
 
             try:
-                UI.GUI.MoveList.clear()
-                ChessManager.ChessBoard.reset()
-                ChessManager.CurrentBoardState.clear()
+                BoardManager.MODULE_REF_UI.GUI.MoveList.clear()
+                BoardManager.ChessBoard.reset()
+                BoardManager.CurrentBoardState.clear()
 
                 PGNIO = io.StringIO(PGNString)
                 Game = chess.pgn.read_game(PGNIO)
@@ -307,43 +324,43 @@ class ChessManager:
                 for Move in Game.mainline_moves():
                     MoveNumber += 1
 
-                    if Move in ChessManager.ChessBoard.legal_moves:
+                    if Move in BoardManager.ChessBoard.legal_moves:
                         if Debug == True:
                             print(f"[DEBUG] >> Processing move \"{Move}\"...")
 
-                        CurrentDepth = min(min(ChessManager.AnalysisDepthLimit, PositionsChecked // (MoveCount // ChessManager.AnalysisDepthLimit)), ChessManager.AnalysisDepthLimit)
-                        Piece = ChessManager.ChessBoard.piece_at(Move.from_square)
+                        CurrentDepth = min(min(BoardManager.AnalysisDepthLimit, PositionsChecked // (MoveCount // BoardManager.AnalysisDepthLimit)), BoardManager.AnalysisDepthLimit)
+                        Piece = BoardManager.ChessBoard.piece_at(Move.from_square)
                         
-                        ChessManager.ChessBoard.push(Move)
+                        BoardManager.ChessBoard.push(Move)
                         
                         if Debug == True:
                             print(f"[DEBUG] >> Analyzing board (DEPTH={CurrentDepth})...")
 
-                        BoardAnalysis = ChessManager.ChessEngine.analyse(ChessManager.ChessBoard, chess.engine.Limit(time=ChessManager.AnalyseTimeLimit, depth=CurrentDepth))
+                        BoardAnalysis = BoardManager.ChessEngine.analyse(BoardManager.ChessBoard, chess.engine.Limit(time=BoardManager.AnalyseTimeLimit, depth=CurrentDepth))
                         CurrentWhiteScore = BoardAnalysis['score'].white().score()
                         CurrentBlackScore = BoardAnalysis['score'].black().score()
 
                         if BoardAnalysis['score'].is_mate() == False and CurrentWhiteScore != None and CurrentBlackScore != None:
                             if Piece.color == 0:
-                                MoveQuality = ChessManager.GetQualityOfMove(-1, CurrentWhiteScore, PreviousWhiteScore, Debug)
+                                MoveQuality = BoardManager.GetQualityOfMove(-1, CurrentWhiteScore, PreviousWhiteScore, Debug)
 
                             else:
-                                MoveQuality = ChessManager.GetQualityOfMove(1, CurrentBlackScore, PreviousBlackScore, Debug)
+                                MoveQuality = BoardManager.GetQualityOfMove(1, CurrentBlackScore, PreviousBlackScore, Debug)
 
                         else:
                             MoveQuality = "Neutral"
 
-                        UI.GUI.MoveList.append({
+                        BoardManager.MODULE_REF_UI.GUI.MoveList.append({
                             "MoveNumber": str(MoveNumber),
-                            "Color": ChessManager.ChessPieceColors[not Piece.color],
-                            "Player": Game.headers.get(ChessManager.ChessPieceColors[not Piece.color], "Unknown"),
+                            "Color": BoardManager.ChessPieceColors[not Piece.color],
+                            "Player": Game.headers.get(BoardManager.ChessPieceColors[not Piece.color], "Unknown"),
                             "FromPos": chess.square_name(Move.from_square).capitalize(),
                             "ToPos": chess.square_name(Move.to_square).capitalize(),
                             "Quality": MoveQuality
                         })
 
                         if Debug == True:
-                            print(f"[DEBUG] >> {ChessManager.ChessPieceColors[not Piece.color]} piece moved from \"{chess.square_name(Move.from_square).capitalize()}\" to \"{chess.square_name(Move.to_square).capitalize()}\", by \"{Game.headers.get(ChessManager.ChessPieceColors[not Piece.color], "Unknown")}\".")
+                            print(f"[DEBUG] >> {BoardManager.ChessPieceColors[not Piece.color]} piece moved from \"{chess.square_name(Move.from_square).capitalize()}\" to \"{chess.square_name(Move.to_square).capitalize()}\", by \"{Game.headers.get(BoardManager.ChessPieceColors[not Piece.color], "Unknown")}\".")
                             print(f"[DEBUG] >> Analysis result: {BoardAnalysis}")
 
                     else:
@@ -360,9 +377,9 @@ class ChessManager:
                         PreviousWhiteScore = 0
                         PreviousBlackScore = 0
 
-                    IMGUI.focus_item("PGNWindow")
-                    IMGUI.set_value("PGNProgressBar", (Progress / 100) * 0.5)
-                    IMGUI.configure_item("PGNProgressBar", overlay=f"{round(Progress * 0.5, 2)}%")
+                    BoardManager.MODULE_REF_IMGUI.focus_item("PGNWindow")
+                    BoardManager.MODULE_REF_IMGUI.set_value("PGNProgressBar", (Progress / 100) * 0.5)
+                    BoardManager.MODULE_REF_IMGUI.configure_item("PGNProgressBar", overlay=f"{round(Progress * 0.5, 2)}%")
                     
                 PositionsChecked = 0
 
@@ -373,15 +390,15 @@ class ChessManager:
                         if Debug == True:
                             print(f"[DEBUG] >> Finding piece at board position {PieceIndex} ([{Row}, {Column}], {round((PositionsChecked / 63) * 100, 2)}% complete)...")
 
-                        Piece = ChessManager.ChessBoard.piece_at(PieceIndex)
+                        Piece = BoardManager.ChessBoard.piece_at(PieceIndex)
                         
                         if Piece != None:
                             if Debug == True:
-                                print(f"[DEBUG] >> {ChessManager.ChessPieceColors[not Piece.color]}{chess.piece_name(Piece.piece_type).capitalize()} is at position \"{ChessManager.BoardPosNames[Row][Column]}\".")
+                                print(f"[DEBUG] >> {BoardManager.ChessPieceColors[not Piece.color]}{chess.piece_name(Piece.piece_type).capitalize()} is at position \"{BoardManager.BoardPosNames[Row][Column]}\".")
 
-                            ChessManager.CurrentBoardState.append({
-                                "Piece": f"{ChessManager.ChessPieceColors[not Piece.color]}{chess.piece_name(Piece.piece_type).capitalize()}", 
-                                "Pos": ChessManager.BoardPosNames[Row][Column]
+                            BoardManager.CurrentBoardState.append({
+                                "Piece": f"{BoardManager.ChessPieceColors[not Piece.color]}{chess.piece_name(Piece.piece_type).capitalize()}", 
+                                "Pos": BoardManager.BoardPosNames[Row][Column]
                             })
 
                         elif Debug == True:
@@ -390,11 +407,11 @@ class ChessManager:
                         PositionsChecked += 1
                         Progress = round((PositionsChecked / MoveCount) * 100, 2)
 
-                        IMGUI.focus_item("PGNWindow")
-                        IMGUI.set_value("PGNProgressBar", ((Progress / 100) * 0.5) + 50)
-                        IMGUI.configure_item("PGNProgressBar", overlay=f"{round((Progress * 0.5) + 50, 2)}%")
+                        BoardManager.MODULE_REF_IMGUI.focus_item("PGNWindow")
+                        BoardManager.MODULE_REF_IMGUI.set_value("PGNProgressBar", ((Progress / 100) * 0.5) + 50)
+                        BoardManager.MODULE_REF_IMGUI.configure_item("PGNProgressBar", overlay=f"{round((Progress * 0.5) + 50, 2)}%")
 
-                UI.GUI.MovesUpdated = True
+                BoardManager.MODULE_REF_UI.GUI.MovesUpdated = True
 
             except Exception as EX:
                 print(f"[ERROR] >> {EX}")
@@ -402,15 +419,15 @@ class ChessManager:
                 if Debug == True:
                     traceback.print_exc()
 
-                ErrorMessageBox = UI.MessageBox()
-                ErrorMessageBox.Buttons = UI.MessageBoxButtons.Close
+                ErrorMessageBox = BoardManager.MODULE_REF_UI.MessageBox()
+                ErrorMessageBox.Buttons = BoardManager.MODULE_REF_UI.MessageBoxButtons.Close
                 ErrorMessageBox.Title = "Error - Chess Manager"
                 ErrorMessageBox.Message = f"Failed to parse PGN data:\n\n{EX}"
                 ErrorMessageBox.MessageBoxShown = False
 
-                UI.GUI.MessageBoxes.append(ErrorMessageBox)
+                BoardManager.MODULE_REF_UI.GUI.MessageBoxes.append(ErrorMessageBox)
             
-            IMGUI.set_value("PGNProgressBar", 1.0)
-            IMGUI.configure_item("PGNProgressBar", overlay="100%")
+            BoardManager.MODULE_REF_IMGUI.set_value("PGNProgressBar", 1.0)
+            BoardManager.MODULE_REF_IMGUI.configure_item("PGNProgressBar", overlay="100%")
             time.sleep(0.25)
-            IMGUI.delete_item("PGNWindow")        
+            BoardManager.MODULE_REF_IMGUI.delete_item("PGNWindow")        
